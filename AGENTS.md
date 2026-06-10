@@ -2,7 +2,7 @@
 
 ## Project Context
 
-Token Horse is a zero-dependency terminal pet: a 16x4 braille horse that gallops faster as the host CLI session consumes more tokens per second. It targets two hosts:
+Token Horse is a zero-dependency terminal pet: a half-block pixel horse (32x8 chars by default, 16x4 with `--size=s`) that gallops faster as the host CLI session consumes more tokens per second. It targets two hosts:
 
 - **Claude Code** — via the official `statusLine` command hook (stdin JSON, one frame per invocation).
 - **Codex CLI** — via `--watch-codex`, which tails `~/.codex/sessions/**/rollout-*.jsonl` because Codex does not support custom statusline commands.
@@ -26,7 +26,7 @@ Single runtime file (`horse-token-runner.mjs`), no external dependencies, Node >
 ## Critical Rules
 
 - **No runtime dependencies.** The whole point is `npx token-horse` with nothing else.
-- **Never break the 16x4 frame contract** — tests pin rows=4, columns<=16, pixels 32x16.
+- **Never break the frame contract** — tests pin L: rows=8/columns<=32, S: rows=4/columns<=16, source pixels 32x16.
 - **State writes go only under** `$XDG_STATE_HOME/token-horse/` (default `~/.local/state/token-horse/`).
 - `session_id` is sanitized (`[^a-zA-Z0-9_-]` stripped, max 64 chars) before being used in a state filename — keep that path-traversal guard.
 - Statusline mode must stay one-shot: read stdin once, print one frame, exit. No timers, no network.

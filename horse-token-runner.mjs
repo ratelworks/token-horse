@@ -26,8 +26,17 @@ const MAX_LEG_FPS = 24;
 const TOKEN_RATE_SLOW = 20;
 const TOKEN_RATE_FAST = 900;
 const TOKEN_RATE_EMA_ALPHA = 0.28;
-const STATUSLINE_DECAY = 0.82;
+// 감쇠를 느리게(0.95/초) — 응답 펄스 사이에도 질주가 유지되고, 진짜 유휴일 때만 선다
+const STATUSLINE_DECAY = 0.95;
 const STATUSLINE_MAX_DELTA_SEC = 4;
+// 이 속도 미만이면 유휴로 보고 말이 직립 자세(frame 0)로 정지한다
+const IDLE_RATE_THRESHOLD = 5;
+// statusline 은 1초에 한 번만 그려지므로 포즈 점프를 캡해 연속성을 유지한다.
+// 4는 15(프레임 수)와 서로소 — 고속에서도 전 프레임을 순회해 원본의 갈기 미세 모션이 자연 재생된다
+const STATUSLINE_MAX_FRAME_STEP = 4;
+// 눈 위치 (원본 도트의 중간톤 픽셀) — 깜빡일 때 머리색으로 덮는다
+const EYE_PIXEL = [3, 27];
+const BLINK_PERIOD_SEC = 6;
 const STATUSLINE_STATE_DIR = join(
   process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'),
   'token-horse',
@@ -244,10 +253,12 @@ function normalizeTokenRate(tokensPerSecond) {
 }
 
 function tokenRateToLegFps(tokensPerSecond) {
+  if (tokensPerSecond < IDLE_RATE_THRESHOLD) return 0; // 토큰 소진 없음 = 서 있기
   const normalized = normalizeTokenRate(tokensPerSecond);
   const eased = Math.sqrt(normalized);
   return MIN_LEG_FPS + eased * (MAX_LEG_FPS - MIN_LEG_FPS);
 }
+
 
 function smoothTokenRate(currentRate, nextRate) {
   if (!Number.isFinite(nextRate)) return currentRate;
@@ -375,9 +386,16 @@ function downsampleHalf(pixels) {
 // 폰트 무관하게 솔리드한 실루엣을 보장하고, 픽셀이 정사각이라 GIF 와 비율이 같다.
 // size 'l'(기본): 32x16 풀해상도 → 32자 x 8줄 (GIF 와 픽셀 단위 동일)
 // size 's': 16x8 다운샘플 → 16자 x 4줄 (컴팩트)
+// 눈 깜빡임: 평소엔 또렷한 눈(어두운 점), 깜빡일 땐 반쯤 감긴 눈(중간톤) — 항상 보인다
+function applyBlink(pixels, blink) {
+  const [r, c] = EYE_PIXEL;
+  if (pixels[r]?.[c] >= 2) pixels[r][c] = blink ? 2 : 1;
+}
+
 export function makeHorseFrame(frameIndex, options = {}) {
   const color = options.color ?? true;
   const pixels = decodeFramePixels(frameIndex);
+  applyBlink(pixels, options.blink ?? false);
   const grid = options.size === 's' ? downsampleHalf(pixels) : pixels;
   const lines = [];
 
@@ -677,20 +695,21 @@ async function runStatusline(args) {
     // 직접 속도 입력 (외부 도구/테스트)
     state.tokenRate = smoothTokenRate(state.tokenRate, payload.tokensPerSecond);
   } else if (payload?.transcriptPath) {
-    // Claude Code: 이 세션 transcript 의 증분 실소비 토큰 / 경과시간 = 실시간 속도.
-    // 응답이 기록될 때마다 그만큼 가속하고, 새 토큰이 없으면(유휴) 부드럽게 감쇠한다.
+    // Claude Code: transcript 는 응답이 끝날 때 한 번에 기록되는 펄스 신호다.
+    // 펄스가 오면 측정 속도로 즉시 점프(max)해 빠른 모델일수록 미친 듯이 달리고,
+    // 응답 사이에는 느리게 감쇠해 작업 중에는 질주가 유지된다.
     const { tokens, offset } = readTranscriptBillableTokens(payload.transcriptPath, state.transcriptOffset);
     state.transcriptOffset = offset;
-    if (tokens > 0 && deltaSec > 0) {
-      state.tokenRate = smoothTokenRate(state.tokenRate, tokens / deltaSec);
-    } else if (deltaSec > 0) {
-      state.tokenRate *= STATUSLINE_DECAY ** deltaSec;
+    if (deltaSec > 0) {
+      const decayed = state.tokenRate * STATUSLINE_DECAY ** deltaSec;
+      state.tokenRate = tokens > 0 ? Math.max(decayed, tokens / deltaSec) : decayed;
     }
   } else if (payload?.totalTokens !== undefined) {
-    // 누적 토큰 직접 입력 (Codex 등) — 차분으로 속도 계산
+    // 누적 토큰 직접 입력 (Codex 등) — 차분 펄스를 즉시 반영하고 느리게 감쇠
     if (state.totalTokens !== null && deltaSec > 0) {
       const deltaTokens = payload.totalTokens - state.totalTokens;
-      if (deltaTokens >= 0) state.tokenRate = smoothTokenRate(state.tokenRate, deltaTokens / deltaSec);
+      const decayed = state.tokenRate * STATUSLINE_DECAY ** deltaSec;
+      state.tokenRate = deltaTokens > 0 ? Math.max(decayed, deltaTokens / deltaSec) : decayed;
     }
     state.totalTokens = payload.totalTokens;
   } else if (deltaSec > 0) {
@@ -698,12 +717,18 @@ async function runStatusline(args) {
   }
 
   const legFps = tokenRateToLegFps(state.tokenRate);
-  state.legPhase = (state.legPhase + legFps * deltaSec) % SHADED_FRAMES.length;
+  if (legFps === 0) {
+    state.legPhase = 0; // 유휴 — 직립 자세(frame 0)로 서 있는다
+  } else {
+    const frameStep = Math.min(legFps * deltaSec, STATUSLINE_MAX_FRAME_STEP);
+    state.legPhase = (state.legPhase + frameStep) % SHADED_FRAMES.length;
+  }
   state.updatedAt = now;
   writeStatuslineState(stateFile, state);
   if (!explicitStateFile) pruneStaleStatuslineStates(dirname(stateFile));
 
-  let frame = makeHorseFrame(Math.floor(state.legPhase), { color, size });
+  const blink = Math.floor(now / 1000) % BLINK_PERIOD_SEC === 0;
+  let frame = makeHorseFrame(Math.floor(state.legPhase), { color, size, blink });
   const infoCmd = getStringOption(args, 'info-cmd', null);
   if (infoCmd) {
     let infoLine = '';
@@ -823,10 +848,12 @@ async function runCli() {
 
     if (!useStdin && !watchCodex && !Number.isFinite(fixedRate)) tokenRate = makeDemoTokenRate(elapsedSec);
     const legFps = tokenRateToLegFps(tokenRate);
-    legPhase += legFps * deltaSec;
+    if (legFps === 0) legPhase = 0; // 유휴 — 직립 자세로 선다
+    else legPhase += legFps * deltaSec;
 
     if (!noClear) process.stdout.write(CLEAR_SCREEN);
-    process.stdout.write(makeHorseFrame(Math.floor(legPhase), { size }));
+    const blink = Math.floor(now / 1000) % BLINK_PERIOD_SEC === 0;
+    process.stdout.write(makeHorseFrame(Math.floor(legPhase), { size, blink }));
     process.stdout.write('\n');
 
     if (durationSec > 0 && elapsedSec >= durationSec) return shutdown(0);

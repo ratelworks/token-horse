@@ -1,6 +1,8 @@
 # Token Horse
 
-A terminal pet for [Claude Code](https://code.claude.com) and [Codex CLI](https://developers.openai.com/codex/cli) — a tiny braille horse that gallops faster as your session burns more tokens per second.
+A terminal pet for [Claude Code](https://code.claude.com) and [Codex CLI](https://developers.openai.com/codex/cli) — a tiny pixel horse that gallops faster as your session burns more tokens per second.
+
+Inspired by the little galloping horse on old Korean taxi meters: the faster the fare ticked up, the faster it ran. Same deal here — the harder your model works, the harder this horse gallops.
 
 [한국어 README](./README.ko.md)
 
@@ -72,7 +74,8 @@ tmux split-window -v -l 5 'token-horse --watch-codex --no-clear'
 - The horse silhouette is drawn in three shades of green (truecolor ANSI) using solid block glyphs, so it stays crisp in any monospace font.
 - In Claude Code, speed tracks **this session's real token consumption**: token-horse reads the session's `transcript_path` JSONL and measures the per-poll delta of billable tokens (input + output + cache-creation; cached-context reads are excluded). Transcripts are append-only, so context compaction and cache reuse never distort the speed.
 - Speed is continuous, not stepped: ~20 tokens/sec trots, 900+ tokens/sec is a full gallop.
-- When tokens stop flowing, the horse slows down and stops (exponential decay).
+- Token pulses hit instantly (fast models gallop like crazy), then decay slowly — the horse keeps running while you work, and only when tokens truly stop does it come to a standstill in an upright pose.
+- The mane sways naturally while galloping (the original sprite's frames), and the horse blinks every few seconds.
 - Statusline mode reads stdin JSON once, prints one frame, and exits.
 - Frame state lives in `~/.local/state/token-horse/` (or `$XDG_STATE_HOME`). State files are isolated per Claude Code `session_id`, so concurrent sessions never pollute each other's speed estimate. Stale session states are pruned after 48 hours.
 

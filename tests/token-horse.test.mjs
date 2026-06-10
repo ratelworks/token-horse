@@ -308,3 +308,84 @@ test('statusline 모드는 session_id 별로 state 파일을 격리한다', () =
     rmSync(stateHome, { recursive: true, force: true });
   }
 });
+
+test('유휴(토큰 소진 없음)면 직립 자세(frame 0)로 정지한다', () => {
+  const workingDir = mkdtempSync(join(tmpdir(), 'token-horse-idle-'));
+  const stateFile = join(workingDir, 'state.json');
+
+  try {
+    const run = () => execFileSync(
+      process.execPath,
+      [RUNNER_PATH, '--statusline', '--plain', `--state-file=${stateFile}`],
+      { encoding: 'utf8', input: '{}' },
+    );
+    const first = run();
+    const second = run();
+
+    // 토큰 입력이 전혀 없으면 직립(frame 0) 정지 — 눈 깜빡임만 허용
+    const state = JSON.parse(readFileSync(stateFile, 'utf8'));
+    assert.equal(state.legPhase, 0);
+    const rows = splitRows(first);
+    assert.equal(rows.length, 8);
+    const stripEye = (t) => t.replaceAll('▀', '#').replaceAll('▄', '#').replaceAll('█', '#');
+    assert.equal(stripEye(first), stripEye(second)); // 실루엣 동일 (글리프 단위)
+  } finally {
+    rmSync(workingDir, { recursive: true, force: true });
+  }
+});
+
+test('transcript 펄스는 즉시 최고속으로 점프한다 (EMA 로 깎이지 않음)', () => {
+  const workingDir = mkdtempSync(join(tmpdir(), 'token-horse-pulse-'));
+  const stateFile = join(workingDir, 'state.json');
+  const transcript = join(workingDir, 't.jsonl');
+  const statuslineInput = JSON.stringify({ session_id: 'p', transcript_path: transcript });
+
+  try {
+    writeFileSync(transcript, '');
+    execFileSync(process.execPath, [RUNNER_PATH, '--statusline', '--plain', `--state-file=${stateFile}`], {
+      encoding: 'utf8', input: statuslineInput,
+    });
+    const base = JSON.parse(readFileSync(stateFile, 'utf8'));
+    base.updatedAt = Date.now() - 1000;
+    writeFileSync(stateFile, JSON.stringify(base));
+
+    writeFileSync(transcript, `${JSON.stringify({
+      type: 'assistant',
+      message: { usage: { input_tokens: 0, output_tokens: 3000, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 } },
+    })}\n`);
+    execFileSync(process.execPath, [RUNNER_PATH, '--statusline', '--plain', `--state-file=${stateFile}`], {
+      encoding: 'utf8', input: statuslineInput,
+    });
+
+    const state = JSON.parse(readFileSync(stateFile, 'utf8'));
+    // 1초간 3000토큰 펄스 → 측정치(≈3000 tok/s)가 그대로 반영돼야 한다 (EMA 였다면 ~840)
+    assert.ok(state.tokenRate > 1500, `펄스 즉응이어야 한다 (got ${state.tokenRate})`);
+  } finally {
+    rmSync(workingDir, { recursive: true, force: true });
+  }
+});
+
+test('statusline 포즈 점프는 폴당 캡 이내다 (고속 랜덤 포즈화 방지)', () => {
+  const workingDir = mkdtempSync(join(tmpdir(), 'token-horse-step-'));
+  const stateFile = join(workingDir, 'state.json');
+
+  try {
+    execFileSync(process.execPath, [RUNNER_PATH, '--statusline', '--plain', `--state-file=${stateFile}`], {
+      encoding: 'utf8', input: '{"tokensPerSecond":900}',
+    });
+    const base = JSON.parse(readFileSync(stateFile, 'utf8'));
+    const phaseBefore = base.legPhase;
+    base.updatedAt = Date.now() - 4000; // 4초 경과 — 캡 없으면 24*4=96프레임 점프
+    writeFileSync(stateFile, JSON.stringify(base));
+
+    execFileSync(process.execPath, [RUNNER_PATH, '--statusline', '--plain', `--state-file=${stateFile}`], {
+      encoding: 'utf8', input: '{"tokensPerSecond":900}',
+    });
+    const state = JSON.parse(readFileSync(stateFile, 'utf8'));
+    const advanced = (state.legPhase - phaseBefore + 15) % 15;
+    assert.ok(advanced <= 4.001, `포즈 점프가 캡(4) 이내여야 한다 (got ${advanced})`);
+  } finally {
+    rmSync(workingDir, { recursive: true, force: true });
+  }
+});
+

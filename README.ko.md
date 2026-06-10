@@ -57,8 +57,9 @@ tmux split-window -v -l 5 'token-horse --watch-codex --no-clear'
 
 ## 동작 방식
 
-- 말 출력은 L 단일 사이즈만 유지한다: 16자 x 4줄 braille 프레임.
-- 원본 말 실루엣을 녹색 3단 명도차로 단순화했다 (truecolor ANSI).
+- 기본 L 사이즈는 32자 x 8줄 반각 블록 프레임 — 프리뷰 GIF와 픽셀 단위로 동일하다. 컴팩트가 필요하면 `--size=s` (16자 x 4줄).
+- 말 실루엣은 녹색 3단 명도(truecolor ANSI)의 솔리드 블록 글리프로 그려져 어떤 모노스페이스 폰트에서도 선명하다.
+- Claude Code에서는 **이 세션의 실제 토큰 소비량**에 연동된다: token-horse가 세션의 `transcript_path` JSONL을 읽어 폴링 사이의 실소비 토큰 증분(input + output + cache_creation, 캐시 재사용 읽기는 제외)을 속도로 환산한다. transcript는 append-only라 컨텍스트 compaction이나 캐시 재사용에 속도가 왜곡되지 않는다.
 - 속도는 단계형이 아니라 연속형이다: 20 tokens/sec 근처는 느리게, 900 tokens/sec 이상은 전력 질주.
 - 토큰 입력이 끊기면 말이 점점 느려지다 멈춘다 (지수 감쇠).
 - statusline 모드는 stdin JSON을 1회 읽고 한 프레임만 출력한 뒤 종료한다.
@@ -78,15 +79,12 @@ tmux split-window -v -l 5 'token-horse --watch-codex --no-clear'
 { "usage": { "total_tokens": 123456 } }
 ```
 
-Claude Code statusline 입력:
+Claude Code statusline 입력 — token-horse가 `transcript_path` JSONL을 읽어 턴별 실소비 토큰(`input + output + cache_creation`, 캐시 재사용 읽기 제외)을 누적하고, 폴링 사이의 증분으로 tokens/sec를 계산한다:
 
 ```json
 {
   "session_id": "abc123",
-  "context_window": {
-    "total_input_tokens": 15500,
-    "total_output_tokens": 1200
-  }
+  "transcript_path": "~/.claude/projects/your-project/abc123.jsonl"
 }
 ```
 

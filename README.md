@@ -68,8 +68,9 @@ tmux split-window -v -l 5 'token-horse --watch-codex --no-clear'
 
 ## How it behaves
 
-- Single L size: a 16-column × 4-row braille frame.
-- The original horse silhouette is simplified into three shades of green (truecolor ANSI).
+- Default L size: a 32-column × 8-row half-block frame — pixel-identical to the preview GIF. Pass `--size=s` for a compact 16×4 frame.
+- The horse silhouette is drawn in three shades of green (truecolor ANSI) using solid block glyphs, so it stays crisp in any monospace font.
+- In Claude Code, speed tracks **this session's real token consumption**: token-horse reads the session's `transcript_path` JSONL and measures the per-poll delta of billable tokens (input + output + cache-creation; cached-context reads are excluded). Transcripts are append-only, so context compaction and cache reuse never distort the speed.
 - Speed is continuous, not stepped: ~20 tokens/sec trots, 900+ tokens/sec is a full gallop.
 - When tokens stop flowing, the horse slows down and stops (exponential decay).
 - Statusline mode reads stdin JSON once, prints one frame, and exits.
@@ -89,15 +90,12 @@ Cumulative tokens:
 { "usage": { "total_tokens": 123456 } }
 ```
 
-Claude Code statusline input:
+Claude Code statusline input — token-horse reads the `transcript_path` JSONL and sums each turn's billable tokens (`input + output + cache_creation`, excluding cached-context reads); the per-poll delta is the live tokens/sec:
 
 ```json
 {
   "session_id": "abc123",
-  "context_window": {
-    "total_input_tokens": 15500,
-    "total_output_tokens": 1200
-  }
+  "transcript_path": "~/.claude/projects/your-project/abc123.jsonl"
 }
 ```
 

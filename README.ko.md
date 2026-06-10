@@ -2,6 +2,8 @@
 
 Token Horse는 [Claude Code](https://code.claude.com)와 [Codex CLI](https://developers.openai.com/codex/cli)에서 토큰 사용 속도에 비례해 달리는 말 pet이다.
 
+옛날 택시 미터기 위에서 요금이 올라갈수록 더 빨리 달리던 작은 말에서 영감을 받았다 — 모델이 토큰을 태울수록 이 말도 더 빨리 달린다.
+
 [English README](./README.md)
 
 ![Token Horse preview](./horse-preview.gif)
@@ -61,7 +63,8 @@ tmux split-window -v -l 5 'token-horse --watch-codex --no-clear'
 - 말 실루엣은 녹색 3단 명도(truecolor ANSI)의 솔리드 블록 글리프로 그려져 어떤 모노스페이스 폰트에서도 선명하다.
 - Claude Code에서는 **이 세션의 실제 토큰 소비량**에 연동된다: token-horse가 세션의 `transcript_path` JSONL을 읽어 폴링 사이의 실소비 토큰 증분(input + output + cache_creation, 캐시 재사용 읽기는 제외)을 속도로 환산한다. transcript는 append-only라 컨텍스트 compaction이나 캐시 재사용에 속도가 왜곡되지 않는다.
 - 속도는 단계형이 아니라 연속형이다: 20 tokens/sec 근처는 느리게, 900 tokens/sec 이상은 전력 질주.
-- 토큰 입력이 끊기면 말이 점점 느려지다 멈춘다 (지수 감쇠).
+- 토큰 펄스는 즉시 반영된다(빠른 모델이면 미친 듯이 달린다). 감쇠는 느려서 작업 중에는 계속 달리고, 토큰 소진이 정말 없을 때만 직립 자세로 선다.
+- 달릴 때는 원본 스프라이트의 갈기 모션이 은은하게 재생되고, 몇 초마다 눈을 깜빡인다.
 - statusline 모드는 stdin JSON을 1회 읽고 한 프레임만 출력한 뒤 종료한다.
 - 프레임 진행 상태는 `~/.local/state/token-horse/`(또는 `$XDG_STATE_HOME`)에 저장한다. Claude Code `session_id`별로 state 파일을 격리하므로 멀티세션에서도 속도 계산이 섞이지 않는다 (48시간 지난 세션 state는 자동 정리).
 

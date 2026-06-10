@@ -1,0 +1,110 @@
+# Token Horse
+
+Token Horse는 [Claude Code](https://code.claude.com)와 [Codex CLI](https://developers.openai.com/codex/cli)에서 토큰 사용 속도에 비례해 달리는 말 pet이다.
+
+[English README](./README.md)
+
+![Token Horse preview](./horse-preview.gif)
+
+## 설치
+
+```bash
+npm install -g token-horse
+```
+
+설치 없이 데모만 보기:
+
+```bash
+npx token-horse --rate=600 --duration=8
+```
+
+## Claude Code statusline 연결
+
+`settings.json`의 `statusLine` command에 연결한다. statusline은 멀티라인 출력을 공식 지원하므로 4줄 말이 그대로 표시된다.
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "token-horse --statusline",
+    "padding": 0,
+    "refreshInterval": 1
+  }
+}
+```
+
+- `refreshInterval: 1`을 권장한다. statusline은 기본적으로 이벤트(새 응답, compact 등)에서만 재실행되므로, 타이머 재실행이 있어야 응답 사이 유휴 구간에서 말이 자연스럽게 감속한다.
+- 터미널이 truecolor ANSI를 제대로 표시하지 않으면 `--plain`을 붙인다.
+
+## Codex CLI 연결
+
+Codex CLI의 `tui.status_line`은 내장 위젯 식별자만 허용하고 외부 명령을 실행하지 못한다. 대신 Token Horse가 Codex 세션 로그(`~/.codex/sessions/**/rollout-*.jsonl`)의 `token_count` 이벤트를 직접 tail한다. 별도 터미널이나 tmux pane에서 실행한다:
+
+```bash
+token-horse --watch-codex
+```
+
+- 가장 최근 세션 파일을 자동으로 찾고, 새 세션이 시작되면 따라간다.
+- 세션 누적 토큰(`total_token_usage.total_tokens`)의 차이로 속도를 계산한다.
+- 기본 무한 실행이며 Ctrl+C로 종료한다. `--duration=초`로 제한할 수 있다.
+- 세션 디렉토리가 다르면 `--codex-sessions=/path/to/sessions`로 지정한다.
+
+tmux 하단 pane 예시:
+
+```bash
+tmux split-window -v -l 5 'token-horse --watch-codex --no-clear'
+```
+
+## 동작 방식
+
+- 말 출력은 L 단일 사이즈만 유지한다: 16자 x 4줄 braille 프레임.
+- 원본 말 실루엣을 녹색 3단 명도차로 단순화했다 (truecolor ANSI).
+- 속도는 단계형이 아니라 연속형이다: 20 tokens/sec 근처는 느리게, 900 tokens/sec 이상은 전력 질주.
+- 토큰 입력이 끊기면 말이 점점 느려지다 멈춘다 (지수 감쇠).
+- statusline 모드는 stdin JSON을 1회 읽고 한 프레임만 출력한 뒤 종료한다.
+- 프레임 진행 상태는 `~/.local/state/token-horse/`(또는 `$XDG_STATE_HOME`)에 저장한다. Claude Code `session_id`별로 state 파일을 격리하므로 멀티세션에서도 속도 계산이 섞이지 않는다 (48시간 지난 세션 state는 자동 정리).
+
+## 입력 형식
+
+직접 속도:
+
+```json
+{ "tokensPerSecond": 450 }
+```
+
+누적 토큰:
+
+```json
+{ "usage": { "total_tokens": 123456 } }
+```
+
+Claude Code statusline 입력:
+
+```json
+{
+  "session_id": "abc123",
+  "context_window": {
+    "total_input_tokens": 15500,
+    "total_output_tokens": 1200
+  }
+}
+```
+
+Codex 세션 이벤트 라인 (`--watch-codex`가 내부적으로 파싱하는 형식):
+
+```json
+{ "type": "event_msg", "payload": { "type": "token_count", "info": { "total_token_usage": { "total_tokens": 20987209 } } } }
+```
+
+누적 토큰을 받으면 이전 호출과의 차이로 tokens/sec를 계산한다.
+
+## 개발
+
+```bash
+npm run check   # 구문 검사 + 테스트 + OSS 위생 게이트
+npm run demo    # 파형 데모 애니메이션
+```
+
+## 라이선스
+
+MIT © Ratelworks Inc.

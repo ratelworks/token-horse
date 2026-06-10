@@ -1,0 +1,55 @@
+{
+  "name": "token-horse",
+  "version": "0.1.0",
+  "description": "Token usage reactive horse pet for Claude Code statuslines and Codex CLI sessions.",
+  "type": "module",
+  "bin": {
+    "token-horse": "./horse-token-runner.mjs"
+  },
+  "files": [
+    "horse-token-runner.mjs",
+    "render-horse-preview.mjs",
+    "horse-preview.gif",
+    "README.md",
+    "README.ko.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node horse-token-runner.mjs",
+    "demo": "node horse-token-runner.mjs",
+    "preview": "node render-horse-preview.mjs",
+    "statusline:sample": "printf '{\"tokensPerSecond\":450}' | node horse-token-runner.mjs --statusline",
+    "build": "node --check horse-token-runner.mjs && node --check render-horse-preview.mjs",
+    "typecheck": "npm run build",
+    "test": "node --test",
+    "check:oss-hygiene": "node scripts/check-oss-hygiene.mjs",
+    "check": "npm run build && npm test && npm run check:oss-hygiene",
+    "prepublishOnly": "npm run check"
+  },
+  "keywords": [
+    "cli",
+    "statusline",
+    "claude-code",
+    "codex",
+    "token-usage",
+    "terminal-pet"
+  ],
+  "author": {
+    "name": "Ratelworks Inc.",
+    "email": "alphamale@ratelworks.co.kr",
+    "url": "https://ratelworks.co.kr"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ratelworks/token-horse"
+  },
+  "bugs": {
+    "url": "https://github.com/ratelworks/token-horse/issues"
+  },
+  "homepage": "https://github.com/ratelworks/token-horse#readme",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

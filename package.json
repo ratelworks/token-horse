@@ -4,7 +4,7 @@
   "description": "Token usage reactive horse pet for Claude Code statuslines and Codex CLI sessions.",
   "type": "module",
   "bin": {
-    "token-horse": "./horse-token-runner.mjs"
+    "token-horse": "horse-token-runner.mjs"
   },
   "files": [
     "horse-token-runner.mjs",
@@ -42,7 +42,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ratelworks/token-horse"
+    "url": "git+https://github.com/ratelworks/token-horse.git"
   },
   "bugs": {
     "url": "https://github.com/ratelworks/token-horse/issues"

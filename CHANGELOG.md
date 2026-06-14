@@ -1,42 +1,48 @@
 # Changelog
 
+## 0.1.4 — 2026-06-15
+
+### Changed
+
+- English README is now the default (`README.md`); the Korean version moved to `README.ko.md`. Token Horse targets a global audience, so English leads and Korean follows.
+- Brought the English docs fully up to date (`--info-cmd` usage, 8-row default frame) and switched the changelog to English.
+
 ## 0.1.3 — 2026-06-10
 
-### 변경
+### Changed
 
-- 한국어 README 말투를 경어체로 다듬고 소개글을 부드럽게 고쳤습니다.
-- 기존 statusline 스크립트와 함께 쓰는 `--info-cmd` 사용법을 README에 추가했습니다.
+- Polished the Korean README's tone and softened the intro copy.
+- Documented `--info-cmd` for running the horse alongside an existing statusline script.
 
 ## 0.1.2 — 2026-06-10
 
-### 변경
+### Changed
 
-- 한국어 README를 기본으로 전환 (`README.md` = 한국어, `README.en.md` = 영어).
-- 실제 statusline 모습(정보줄 + 오른쪽 말, 질주↔유휴↔눈 깜빡임) 데모 GIF 추가.
-- 영감 출처 명시: 옛 택시 미터기 위에서 요금이 올라갈수록 빨리 달리던 말.
+- Made the Korean README the default (`README.md` = Korean, `README.en.md` = English). *(Reverted in 0.1.4 — English is now the default.)*
+- Added a demo GIF of the real statusline (info line + horse on the right; gallop ↔ idle ↔ blink).
+- Credited the inspiration: the little horse on old Korean taxi meters that ran faster as the fare climbed.
 
 ## 0.1.1 — 2026-06-10
 
-빠른 모델(고속 토큰 생성)에서 속도가 눈에 보이도록 운동 모델을 다듬은 릴리즈.
+Tuned the motion model so speed is visible on fast (high token-rate) models.
 
-### 변경
+### Changed
 
-- 토큰 펄스 즉응: transcript/Codex 누적 증분이 오면 측정 속도로 즉시 점프하고(EMA 제거), 느리게 감쇠한다(0.95/초) — 작업 중에는 질주가 유지되고 진짜 유휴일 때만 멈춘다.
-- 유휴 정지: 속도가 5 tokens/sec 미만이면 다리를 멈추고 직립 자세로 선다.
-- statusline 포즈 점프 캡(폴당 4프레임): 1초 1회 갱신 환경에서 고속이 랜덤 포즈로 보이던 문제 해소. 4는 15와 서로소라 전 프레임을 순회하며 원본의 갈기 미세 모션이 자연 재생된다.
-- 눈 깜빡임: 평소엔 또렷한 눈, 6초마다 1초간 반쯤 감긴 눈 — 항상 보인다.
-- 원본(OpenGameArt, CC0) 15프레임과 픽셀 단위 무손실 일치 검증 (정렬 시프트 제외 diff 0).
-
+- Instant token pulses: when a transcript/Codex cumulative increment arrives, the horse jumps straight to the measured speed (no EMA) and decays slowly (0.95/sec) — it keeps sprinting mid-task and only stops when truly idle.
+- Idle standstill: below 5 tokens/sec the legs stop and the horse stands upright.
+- Statusline pose-jump cap (4 frames per poll): fixes the high-speed "random pose" look under once-per-second refresh. 4 is coprime with 15, so it cycles through every frame and the original mane micro-motion plays naturally.
+- Eye blink: clear eyes normally, half-closed for 1 second every 6 seconds — always visible.
+- Verified pixel-identical to the original 15 frames (OpenGameArt, CC0) with zero diff aside from an alignment shift.
 
 ## 0.1.0 — 2026-06-10
 
-Claude Code statusline과 Codex CLI에서 토큰 속도에 반응해 달리는 말 pet의 첫 공개 릴리즈.
+First public release of the token-rate-reactive horse pet for Claude Code statuslines and Codex CLI.
 
-### 추가
+### Added
 
-- 16자 x 4줄 braille 말 애니메이션 (15프레임 갤럽 사이클, 녹색 3단 명도).
-- 연속형 속도 매핑: 20 tokens/sec(느림) ~ 900+ tokens/sec(전력 질주), 입력이 끊기면 지수 감쇠로 정지.
-- `--statusline` 모드: Claude Code statusline JSON(stdin) 1회 읽기 → 한 프레임 출력. `session_id`별 state 격리로 멀티세션 동시 사용 지원 (48시간 지난 state 자동 정리).
-- `--watch-codex` 모드: Codex CLI는 커스텀 statusline 명령을 지원하지 않으므로 세션 로그(`rollout-*.jsonl`)의 `token_count` 이벤트를 tail하여 연속 애니메이션으로 표시.
-- 입력 형식: `tokensPerSecond` 직접 / 누적 토큰(`usage.total_tokens` 등) / Claude Code `transcript_path`(세션 JSONL 의 턴별 실소비 토큰 증분 = input+output+cache_creation, 캐시 재사용분 제외) / Codex `total_token_usage.total_tokens`. `context_window` 점유량은 캐시 재사용분이 지배적이고 compaction 시 감소하여 속도 신호로 부적합하므로 사용하지 않는다.
-- 색상 run-length 인코딩으로 statusline 출력량 최소화 (`--plain`으로 무색 출력).
+- 16-char × 4-row braille horse animation (15-frame gallop cycle, three shades of green).
+- Continuous speed mapping: 20 tokens/sec (slow) to 900+ tokens/sec (full sprint), with exponential decay to a standstill when input stops.
+- `--statusline` mode: reads Claude Code statusline JSON (stdin) once → prints one frame. Per-`session_id` state isolation supports concurrent multi-session use (state older than 48 hours is pruned automatically).
+- `--watch-codex` mode: since Codex CLI does not support custom statusline commands, it tails the `token_count` events in the session log (`rollout-*.jsonl`) and renders a continuous animation.
+- Input formats: direct `tokensPerSecond` / cumulative tokens (`usage.total_tokens`, etc.) / Claude Code `transcript_path` (per-turn billable token increment from the session JSONL = input + output + cache_creation, excluding cache reuse) / Codex `total_token_usage.total_tokens`. `context_window` occupancy is dominated by cache reuse and drops on compaction, making it unsuitable as a speed signal, so it is not used.
+- Run-length color encoding minimizes statusline output (`--plain` for colorless output).

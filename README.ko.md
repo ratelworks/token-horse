@@ -74,13 +74,13 @@ tmux split-window -v -l 9 'token-horse --watch-codex --no-clear'
 
 여러 색상 팔레트를 제공합니다. `--skin=<이름>`으로 고르며, 기본값은 `green`입니다. `token-horse --list-skins`로 모든 스킨을 터미널에서 컬러로 미리볼 수 있고, `token-horse --help`로 전체 옵션을 확인할 수 있습니다.
 
-| 스킨 | 모습 |
-|------|------|
-| `green` | 클래식 — 3단계 녹색 음영 (기본값). |
-| `rapidash` | 크림색 몸통에 빨강·노랑이 일렁이는 불꽃 갈기와 꼬리, 회색 발굽. 불꽃 포켓몬 날쌩마에서 따왔습니다. 프레임마다 불꽃 색이 바뀌어 달릴 때 갈기가 너울거립니다. |
-| `bay` | 실제 밤색말 — 갈색 털에 검은 갈기·꼬리·발굽. |
-| `redhare` | 적토마(赤兔馬) — 삼국지의 전설적인 붉은 명마. |
-| `inferno` | 온몸이 불타는 말 — 빨강 → 주황 → 노랑. |
+| 스킨 | 미리보기 | 모습 |
+|------|---------|------|
+| `green` | ![green skin](https://raw.githubusercontent.com/ratelworks/token-horse/main/horse-preview.gif) | 클래식 — 3단계 녹색 음영 (기본값). |
+| `rapidash` | ![rapidash skin](https://raw.githubusercontent.com/ratelworks/token-horse/main/horse-preview-rapidash.gif) | 크림색 몸통에 빨강·노랑이 일렁이는 불꽃 갈기와 꼬리, 회색 발굽. 불꽃 포켓몬 날쌩마에서 따왔습니다. 프레임마다 불꽃 색이 바뀌어 달릴 때 갈기가 너울거립니다. |
+| `bay` | ![bay skin](https://raw.githubusercontent.com/ratelworks/token-horse/main/horse-preview-bay.gif) | 실제 밤색말 — 갈색 털에 검은 갈기·꼬리·발굽. |
+| `redhare` | ![redhare skin](https://raw.githubusercontent.com/ratelworks/token-horse/main/horse-preview-redhare.gif) | 적토마(赤兔馬) — 삼국지의 전설적인 붉은 명마. |
+| `inferno` | ![inferno skin](https://raw.githubusercontent.com/ratelworks/token-horse/main/horse-preview-inferno.gif) | 온몸이 불타는 말 — 빨강 → 주황 → 노랑. |
 
 ```bash
 token-horse --statusline --skin=rapidash

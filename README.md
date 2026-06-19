@@ -74,13 +74,13 @@ tmux split-window -v -l 9 'token-horse --watch-codex --no-clear'
 
 Token Horse ships with several palettes. Pick one with `--skin=<name>` — the default is `green`. Run `token-horse --list-skins` to preview them all (in color, right in your terminal), or `token-horse --help` for every option.
 
-| Skin | Look |
-|------|------|
-| `green` | The classic — three shades of green (default). |
-| `rapidash` | Cream coat with a flickering red-and-yellow fire mane and tail, grey hooves — a nod to the fire-horse Pokémon. The flames shift every frame, so the mane really wavers as it gallops. |
-| `bay` | A realistic bay horse: brown coat with a black mane, tail, and hooves. |
-| `redhare` | Red Hare (赤兔馬), the legendary crimson warhorse of the Three Kingdoms. |
-| `inferno` | The whole horse ablaze — red → orange → yellow. |
+| Skin | Preview | Look |
+|------|---------|------|
+| `green` | ![green skin](https://raw.githubusercontent.com/ratelworks/token-horse/main/horse-preview.gif) | The classic — three shades of green (default). |
+| `rapidash` | ![rapidash skin](https://raw.githubusercontent.com/ratelworks/token-horse/main/horse-preview-rapidash.gif) | Cream coat with a flickering red-and-yellow fire mane and tail, grey hooves — a nod to the fire-horse Pokémon. The flames shift every frame, so the mane really wavers as it gallops. |
+| `bay` | ![bay skin](https://raw.githubusercontent.com/ratelworks/token-horse/main/horse-preview-bay.gif) | A realistic bay horse: brown coat with a black mane, tail, and hooves. |
+| `redhare` | ![redhare skin](https://raw.githubusercontent.com/ratelworks/token-horse/main/horse-preview-redhare.gif) | Red Hare (赤兔馬), the legendary crimson warhorse of the Three Kingdoms. |
+| `inferno` | ![inferno skin](https://raw.githubusercontent.com/ratelworks/token-horse/main/horse-preview-inferno.gif) | The whole horse ablaze — red → orange → yellow. |
 
 ```bash
 token-horse --statusline --skin=rapidash

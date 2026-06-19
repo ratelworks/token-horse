@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 — 2026-06-19
+
+### Added
+
+- Skins: pick a palette with `--skin=<name>`. Ships with `green` (the original default), `rapidash` (cream coat with a flickering red-and-yellow fire mane and tail that wavers every frame, after the Pokémon), `bay` (a realistic brown horse with a black mane and hooves), `redhare` (Red Hare 赤兔馬, the crimson Three Kingdoms warhorse), and `inferno` (the whole horse ablaze).
+- Palettes are split by body part (coat / mane + tail / hooves), so character skins re-colour each part independently while reusing the exact same gallop animation. Single-colour skins paint the whole silhouette in one range. `green` stays the default, so existing setups are unchanged.
+- Discoverability: `token-horse --list-skins` previews every skin in color, `--help` / `-h` lists all options, and an unknown `--skin` now prints a hint (pointing to `--list-skins`) instead of silently falling back.
+- `render-horse-preview.mjs` now accepts `--skin=<name>` to render a per-skin preview GIF.
+
 ## 0.1.4 — 2026-06-15
 
 ### Changed

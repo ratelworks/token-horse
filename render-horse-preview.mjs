@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createDemoStates, getGreenShades, getHorsePixels } from './horse-token-runner.mjs';
+import { createDemoStates, getHorsePixels, getSkinShades, maneFlameShade, partAt } from './horse-token-runner.mjs';
 
 const PREVIEW_DURATION_SEC = 6;
 const PREVIEW_FPS = 16;
@@ -26,8 +26,13 @@ function pushPixel(args, color, x, y) {
   args.push('-fill', color, '-draw', `rectangle ${left},${top} ${left + PIXEL_SIZE - 1},${top + PIXEL_SIZE - 1}`);
 }
 
-function renderFrame(frameIndex, framePath) {
-  const shades = getGreenShades();
+function renderFrame(frameIndex, framePath, skin) {
+  // 부위별 음영 hex (단색 스킨은 mane/hoof 가 body 와 동일)
+  const palettes = {
+    body: getSkinShades(skin, 'body'),
+    mane: getSkinShades(skin, 'mane'),
+    hoof: getSkinShades(skin, 'hoof'),
+  };
   const rows = getHorsePixels(frameIndex);
   const outputWidth = PADDING_X * 2 + rows[0].length * PIXEL_SIZE;
   const outputHeight = PADDING_Y * 2 + rows.length * PIXEL_SIZE;
@@ -39,7 +44,11 @@ function renderFrame(frameIndex, framePath) {
 
   rows.forEach((row, rowIndex) => {
     row.forEach((shade, columnIndex) => {
-      if (shade > 0) pushPixel(args, shades[shade], columnIndex, rowIndex);
+      if (shade <= 0) return;
+      const part = partAt(skin, rowIndex, columnIndex, shade);
+      // 불꽃 갈기는 음영 대신 일렁이는 불꽃 레벨로 색을 고른다 (런타임 렌더와 동일)
+      const eff = part === 'mane' ? (maneFlameShade(skin, rowIndex, columnIndex, frameIndex) ?? shade) : shade;
+      pushPixel(args, palettes[part][eff], columnIndex, rowIndex);
     });
   });
 
@@ -49,7 +58,8 @@ function renderFrame(frameIndex, framePath) {
 
 function main() {
   const args = process.argv.slice(2);
-  const outputFile = getStringOption(args, 'output', 'horse-preview.gif');
+  const skin = getStringOption(args, 'skin', 'green');
+  const outputFile = getStringOption(args, 'output', skin === 'green' ? 'horse-preview.gif' : `horse-preview-${skin}.gif`);
   const outputPath = join(dirname(fileURLToPath(import.meta.url)), outputFile);
   const workingDir = join(tmpdir(), `horse-token-runner-preview-${process.pid}`);
   const states = createDemoStates(PREVIEW_DURATION_SEC, PREVIEW_FPS);
@@ -58,7 +68,7 @@ function main() {
   mkdirSync(workingDir, { recursive: true });
 
   states.forEach((state, index) => {
-    renderFrame(state.frameIndex, join(workingDir, `frame-${String(index).padStart(3, '0')}.png`));
+    renderFrame(state.frameIndex, join(workingDir, `frame-${String(index).padStart(3, '0')}.png`), skin);
   });
 
   const framePaths = readdirSync(workingDir)

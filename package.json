@@ -1,6 +1,6 @@
 {
   "name": "token-horse",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Token usage reactive horse pet for Claude Code statuslines and Codex CLI sessions.",
   "type": "module",
   "bin": {

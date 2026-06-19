@@ -32,6 +32,7 @@ Single runtime file (`horse-token-runner.mjs`), no external dependencies, Node >
 - Statusline mode must stay one-shot: read stdin once, print one frame, exit. No timers, no network.
 - `--watch-codex` reads only the tail (last 64KB) of session logs — do not load whole files.
 - Keep color output run-length encoded; plain output must equal color output with ANSI stripped (test-pinned).
+- **Skins are palette-only.** `SKIN_HEX` holds per-part colours (body / mane / hoof) and `partPaletteAt` maps the shared 32x16 sprite to parts. Adding a skin = one `SKIN_HEX` entry — never fork or duplicate the pixel frames. `green` must stay the default for backward compatibility.
 
 ## File Structure
 

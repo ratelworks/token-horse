@@ -70,10 +70,34 @@ Example, pinned to a bottom tmux pane:
 tmux split-window -v -l 9 'token-horse --watch-codex --no-clear'
 ```
 
+## Skins
+
+Token Horse ships with several palettes. Pick one with `--skin=<name>` — the default is `green`. Run `token-horse --list-skins` to preview them all (in color, right in your terminal), or `token-horse --help` for every option.
+
+| Skin | Look |
+|------|------|
+| `green` | The classic — three shades of green (default). |
+| `rapidash` | Cream coat with a flickering red-and-yellow fire mane and tail, grey hooves — a nod to the fire-horse Pokémon. The flames shift every frame, so the mane really wavers as it gallops. |
+| `bay` | A realistic bay horse: brown coat with a black mane, tail, and hooves. |
+| `redhare` | Red Hare (赤兔馬), the legendary crimson warhorse of the Three Kingdoms. |
+| `inferno` | The whole horse ablaze — red → orange → yellow. |
+
+```bash
+token-horse --statusline --skin=rapidash
+```
+
+Or preview any skin without installing:
+
+```bash
+npx token-horse --rate=600 --duration=8 --skin=redhare
+```
+
+Each palette is split by body part (coat / mane + tail / hooves), so a skin re-colours those parts independently while reusing the exact same gallop animation. Single-colour skins (`green`, `inferno`) just paint the whole silhouette in one range.
+
 ## How it behaves
 
 - The default L size is a 32-column × 8-row half-block frame, pixel-identical to the preview GIF. Want it smaller? `--size=s` gives you a compact 16×4 frame.
-- The horse silhouette is drawn with solid block glyphs in three shades of green (truecolor ANSI), so it stays crisp in any monospace font.
+- The horse silhouette is drawn with solid block glyphs in three shades (truecolor ANSI) — green by default, or any of the skins above — so it stays crisp in any monospace font.
 - In Claude Code, speed tracks **this session's real token consumption**: token-horse reads the session's `transcript_path` JSONL and measures the per-poll delta of billable tokens (input + output + cache-creation; cached-context reads are excluded). Transcripts are append-only, so context compaction and cache reuse never distort the speed.
 - Speed is continuous, not stepped: around 20 tokens/sec it trots, and past 900 tokens/sec it's at a full gallop.
 - Token pulses register instantly — fast models really do make it run like mad — then decay slowly, so the horse keeps running while you work and only comes to a standstill (in an upright pose) once the tokens have truly stopped.

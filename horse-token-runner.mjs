@@ -53,12 +53,113 @@ const CLEAR_SCREEN = '\x1b[2J\x1b[H';
 const HIDE_CURSOR = '\x1b[?25l';
 const SHOW_CURSOR = '\x1b[?25h';
 const FRAME_INTERVAL_MS = Math.round(1000 / RENDER_FPS);
-const GREEN_SHADES = [
-  null,
-  { rgb: '#0f5f24', fg: '\x1b[38;2;15;95;36m', bg: '\x1b[48;2;15;95;36m' },
-  { rgb: '#24b84a', fg: '\x1b[38;2;36;184;74m', bg: '\x1b[48;2;36;184;74m' },
-  { rgb: '#59ff75', fg: '\x1b[38;2;89;255;117m', bg: '\x1b[48;2;89;255;117m' },
-];
+
+// hex(#rrggbb) → truecolor ANSI fg/bg + rgb(프리뷰 렌더용)
+function shadeFromHex(hex) {
+  const r = Number.parseInt(hex.slice(1, 3), 16);
+  const g = Number.parseInt(hex.slice(3, 5), 16);
+  const b = Number.parseInt(hex.slice(5, 7), 16);
+  return { rgb: hex, fg: `\x1b[38;2;${r};${g};${b}m`, bg: `\x1b[48;2;${r};${g};${b}m` };
+}
+
+// 음영 3단계(어두운/중간/밝은) hex 배열 → [null, shade1, shade2, shade3]
+// 인덱스 0(null)은 빈 픽셀, 1~3은 도트 음영값에 1:1 대응한다.
+function buildPalette(hexArr) {
+  return [null, ...hexArr.map(shadeFromHex)];
+}
+
+// 스킨 정의 — 단색(mono)은 body 만, 캐릭터는 부위별(body/mane/hoof).
+// mane = 갈기·꼬리, hoof = 발굽. 도트의 음영값은 각 부위색의 명암으로 재사용된다
+// (= 부위가 색상, 음영이 명도). 단색 스킨은 부위를 무시하고 body 만 쓴다.
+// flame: true 면 갈기·꼬리를 음영값이 아니라 불꽃 레벨(빨강1/주황2/노랑3)로 칠해
+// 프레임마다 색이 일렁인다. 이때 mane 3색은 명암이 아니라 불꽃 색온도다.
+const SKIN_HEX = {
+  green: { body: ['#0f5f24', '#24b84a', '#59ff75'] },
+  rapidash: {
+    body: ['#b8a878', '#ddcca0', '#f2ead2'],
+    mane: ['#e81810', '#f87012', '#f8d420'],
+    hoof: ['#5a6678', '#8492a4', '#aab6c6'],
+    flame: true,
+  },
+  bay: {
+    body: ['#3d2410', '#6b4423', '#9a6536'],
+    mane: ['#15110d', '#2a2018', '#3d2e22'],
+    hoof: ['#161616', '#303030', '#4a4a4a'],
+  },
+  redhare: {
+    body: ['#7a1408', '#bc3618', '#ee6a2c'],
+    mane: ['#560a04', '#9c1c0c', '#d84818'],
+    hoof: ['#241410', '#46281a', '#6a4028'],
+  },
+  inferno: { body: ['#c81c08', '#f06010', '#f8c828'] },
+};
+
+const SKINS = Object.fromEntries(
+  Object.entries(SKIN_HEX).map(([name, parts]) => [name, {
+    body: buildPalette(parts.body),
+    mane: parts.mane ? buildPalette(parts.mane) : null,
+    hoof: parts.hoof ? buildPalette(parts.hoof) : null,
+    flame: parts.flame ?? false,
+  }]),
+);
+const DEFAULT_SKIN = 'green';
+const GREEN_SHADES = SKINS[DEFAULT_SKIN].body;
+
+// 스킨 한 줄 설명 (영어) — --help / --list-skins 안내용
+const SKIN_LABELS = {
+  green: 'The classic green (default)',
+  rapidash: 'Cream coat with a flickering red-and-yellow fire mane and tail',
+  bay: 'A realistic bay horse — brown coat, black mane and hooves',
+  redhare: 'Red Hare — the crimson Three Kingdoms warhorse',
+  inferno: 'The whole horse ablaze, red to yellow',
+};
+
+function resolveSkin(name) {
+  return SKINS[name] ?? SKINS[DEFAULT_SKIN];
+}
+
+function isKnownSkin(name) {
+  return Object.hasOwn(SKINS, name);
+}
+
+// 부위 마스크 (32x16 풀해상도 픽셀 좌표 기준) — 오른쪽을 보고 달리는 말 실루엣.
+// 발굽 = 하단 2행 / 갈기·꼬리 = 몸통 왼쪽 위(목 뒤로 흩날리는 영역) / 나머지 = 몸통.
+// 불꽃 부위 마스크 좌표 (32x16 풀해상도, 오른쪽을 보고 달리는 말 기준).
+// 'mane' 부위 = 갈기(머리 뒤 목덜미 + 정수리) + 꼬리(엉덩이 뒤 왼쪽 흩날림).
+const HOOF_MIN_ROW = 14;        // 이 행부터는 발굽
+const TAIL_MAX_COL = 12;        // 꼬리: 몸통 왼끝보다 왼쪽으로 흩날린다
+const TAIL_MIN_ROW = 5;
+const TAIL_MAX_ROW = 10;
+const MANE_NECK_MIN_COL = 21;   // 갈기 목덜미: 머리 뒤 수직부 (얼굴/주둥이 c25+ 는 제외)
+const MANE_NECK_MAX_COL = 24;
+const MANE_NECK_MIN_ROW = 2;
+const MANE_NECK_MAX_ROW = 6;
+const MANE_CREST_MIN_COL = 23;  // 갈기 정수리: 머리 위
+const MANE_CREST_MAX_COL = 26;
+const MANE_CREST_MAX_ROW = 1;
+
+// shade(음영 1~3)로 꼬리(가는 흩날림)와 엉덩이 몸통 면을 가른다 — 영역을 확실히 한정.
+const TAIL_MAX_SHADE = 2;       // 꼬리는 음영 1~2(윤곽·가는 부분)만, 음영 3(밝은 몸통 면)은 엉덩이라 제외
+function partNameAt(skin, pixelRow, pixelCol, shade) {
+  if (!skin.mane) return 'body'; // 단색 스킨 — 부위 무시
+  if (pixelRow >= HOOF_MIN_ROW) return 'hoof';
+  if (pixelCol <= TAIL_MAX_COL && pixelRow >= TAIL_MIN_ROW && pixelRow <= TAIL_MAX_ROW
+    && shade <= TAIL_MAX_SHADE) return 'mane';
+  if (pixelCol >= MANE_NECK_MIN_COL && pixelCol <= MANE_NECK_MAX_COL
+    && pixelRow >= MANE_NECK_MIN_ROW && pixelRow <= MANE_NECK_MAX_ROW) return 'mane';
+  if (pixelCol >= MANE_CREST_MIN_COL && pixelCol <= MANE_CREST_MAX_COL
+    && pixelRow <= MANE_CREST_MAX_ROW) return 'mane';
+  return 'body';
+}
+
+// 불꽃 레벨(1=빨강 / 2=주황 / 3=노랑): 불꽃은 위로 갈수록 밝다(노랑). 픽셀 높이에
+// 위치·프레임 너울(wobble)을 더해 — 갈기든 꼬리든 빨강~노랑이 프레임마다 일렁인다.
+// 계수 2는 3과 서로소 — frameIndex 가 바뀔 때마다 너울이 실제로 순환한다(3의 배수면 무효).
+function flameShade(pixelRow, pixelCol, frameIndex) {
+  const rise = (HOOF_MIN_ROW - pixelRow) / 4;
+  const wobble = ((pixelCol + frameIndex * 2) % 3) - 1;
+  return clamp(Math.round(rise) + wobble, 1, 3);
+}
 const BLOCK_TOP = '▀';
 const BLOCK_BOTTOM = '▄';
 const BLOCK_FULL = '█';
@@ -394,9 +495,13 @@ function applyBlink(pixels, blink) {
 
 export function makeHorseFrame(frameIndex, options = {}) {
   const color = options.color ?? true;
+  const skin = resolveSkin(options.skin ?? DEFAULT_SKIN);
   const pixels = decodeFramePixels(frameIndex);
   applyBlink(pixels, options.blink ?? false);
-  const grid = options.size === 's' ? downsampleHalf(pixels) : pixels;
+  const compact = options.size === 's';
+  const grid = compact ? downsampleHalf(pixels) : pixels;
+  // grid 좌표 → 풀해상도(32x16) 픽셀 좌표: 부위 마스크는 항상 풀해상도 기준이다
+  const pixelScale = compact ? 2 : 1;
   const lines = [];
 
   for (let r = 0; r < grid.length; r += 2) {
@@ -422,33 +527,61 @@ export function makeHorseFrame(frameIndex, options = {}) {
         continue;
       }
 
+      // 상·하 픽셀이 서로 다른 부위(예: 몸통/발굽 경계)일 수 있어 각각 부위·색을 고른다.
+      // 불꽃 갈기는 음영값 대신 일렁이는 불꽃 레벨로 색을 골라 매 프레임 너울거린다.
+      const pixelCol = c * pixelScale;
+      const topRow = r * pixelScale;
+      const bottomRow = (r + 1) * pixelScale;
+      const topName = partNameAt(skin, topRow, pixelCol, top);
+      const bottomName = partNameAt(skin, bottomRow, pixelCol, bottom);
+      const topPalette = skin[topName] ?? skin.body;
+      const bottomPalette = skin[bottomName] ?? skin.body;
+      const topShade = skin.flame && topName === 'mane' ? flameShade(topRow, pixelCol, frameIndex) : top;
+      const bottomShade = skin.flame && bottomName === 'mane' ? flameShade(bottomRow, pixelCol, frameIndex) : bottom;
+
       let char;
-      let wantFg;
-      let wantBg = null;
+      let fgShade;
+      let fgPalette;
+      let bgShade = null;
+      let bgPalette = null;
       if (top && bottom) {
-        if (top === bottom) {
+        if (topShade === bottomShade && topPalette === bottomPalette) {
           char = BLOCK_FULL;
-          wantFg = top;
+          fgShade = topShade;
+          fgPalette = topPalette;
         } else {
           char = BLOCK_TOP;
-          wantFg = top;
-          wantBg = bottom;
+          fgShade = topShade;
+          fgPalette = topPalette;
+          bgShade = bottomShade;
+          bgPalette = bottomPalette;
         }
       } else if (top) {
         char = BLOCK_TOP;
-        wantFg = top;
+        fgShade = topShade;
+        fgPalette = topPalette;
       } else {
         char = BLOCK_BOTTOM;
-        wantFg = bottom;
+        fgShade = bottomShade;
+        fgPalette = bottomPalette;
       }
 
-      if (wantFg !== activeFg) {
-        line += GREEN_SHADES[wantFg].fg;
-        activeFg = wantFg;
+      const fgCode = fgPalette[fgShade].fg;
+      if (fgCode !== activeFg) {
+        line += fgCode;
+        activeFg = fgCode;
       }
-      if (wantBg !== activeBg) {
-        line += wantBg === null ? BG_RESET : GREEN_SHADES[wantBg].bg;
-        activeBg = wantBg;
+      if (bgShade === null) {
+        if (activeBg !== null) {
+          line += BG_RESET;
+          activeBg = null;
+        }
+      } else {
+        const bgCode = bgPalette[bgShade].bg;
+        if (bgCode !== activeBg) {
+          line += bgCode;
+          activeBg = bgCode;
+        }
       }
       line += char;
     }
@@ -472,6 +605,28 @@ export function getHorseFrameCells(frameIndex) {
 
 export function getGreenShades() {
   return GREEN_SHADES.map((shade) => shade?.rgb ?? null);
+}
+
+// 스킨의 한 부위(body/mane/hoof) 음영 hex 3색을 반환 — 프리뷰 렌더러용
+export function getSkinShades(skinName = DEFAULT_SKIN, part = 'body') {
+  const skin = resolveSkin(skinName);
+  const palette = skin[part] ?? skin.body;
+  return palette.map((shade) => shade?.rgb ?? null);
+}
+
+export function getSkinNames() {
+  return Object.keys(SKINS);
+}
+
+// 부위 마스크를 프리뷰 렌더러와 공유 — 풀해상도(32x16) 픽셀 좌표·음영의 부위명 반환
+export function partAt(skinName, pixelRow, pixelCol, shade) {
+  return partNameAt(resolveSkin(skinName), pixelRow, pixelCol, shade);
+}
+
+// 프리뷰 렌더러용 — 불꽃 스킨이면 갈기 픽셀의 불꽃 레벨, 아니면 null(원래 음영 사용)
+export function maneFlameShade(skinName, pixelRow, pixelCol, frameIndex) {
+  const skin = resolveSkin(skinName);
+  return skin.flame ? flameShade(pixelRow, pixelCol, frameIndex) : null;
 }
 
 export function createDemoStates(durationSec, fps) {
@@ -687,6 +842,7 @@ async function runStatusline(args) {
   const stateFile = explicitStateFile ?? statuslineStateFileFor(payload?.sessionId);
   const color = !hasFlag(args, 'plain') && !hasFlag(args, 'no-color');
   const size = getStringOption(args, 'size', 'l');
+  const skin = getStringOption(args, 'skin', DEFAULT_SKIN);
   const now = Date.now();
   const state = readStatuslineState(stateFile);
   const deltaSec = clamp((now - state.updatedAt) / 1000, 0, STATUSLINE_MAX_DELTA_SEC);
@@ -728,7 +884,7 @@ async function runStatusline(args) {
   if (!explicitStateFile) pruneStaleStatuslineStates(dirname(stateFile));
 
   const blink = Math.floor(now / 1000) % BLINK_PERIOD_SEC === 0;
-  let frame = makeHorseFrame(Math.floor(state.legPhase), { color, size, blink });
+  let frame = makeHorseFrame(Math.floor(state.legPhase), { color, size, blink, skin });
   const infoCmd = getStringOption(args, 'info-cmd', null);
   if (infoCmd) {
     let infoLine = '';
@@ -749,8 +905,55 @@ async function runStatusline(args) {
   process.stdout.write(`${frame}\n`);
 }
 
+// --list-skins 출력: 각 스킨의 이름·설명 + 컬러 미니 말(16x4) 미리보기
+function listSkinsText() {
+  const lines = ['Available skins (pick one with --skin=NAME):', ''];
+  for (const name of getSkinNames()) {
+    lines.push(`  ${name}  —  ${SKIN_LABELS[name] ?? ''}`);
+    for (const row of makeHorseFrame(4, { size: 's', skin: name }).split('\n')) {
+      lines.push(`    ${row}`);
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+function helpText() {
+  return [
+    'token-horse — a token-rate-reactive terminal horse for Claude Code & Codex CLI',
+    '',
+    'Usage:',
+    '  token-horse [options]                Demo animation',
+    '  token-horse --statusline [options]   One-shot statusline frame (reads JSON on stdin)',
+    '  token-horse --watch-codex [options]  Follow a Codex CLI session log',
+    '',
+    'Options:',
+    '  --skin=NAME      Horse skin (default: green). See --list-skins.',
+    '  --size=s|l       Frame size: l = 32x8 (default), s = 16x4 compact',
+    '  --rate=N         Fixed tokens/sec for the demo',
+    '  --duration=SEC   Stop after SEC seconds',
+    '  --plain          Monochrome (no color)',
+    '  --no-clear       Keep previous frames (e.g. tmux panes)',
+    '  --info-cmd=CMD   Show CMD output (first line) left of the horse (statusline)',
+    '  --list-skins     List skins with a color preview, then exit',
+    '  --help, -h       Show this help, then exit',
+    '',
+    'Examples:',
+    '  npx token-horse --rate=600 --skin=rapidash',
+    '  token-horse --statusline --skin=redhare',
+  ].join('\n');
+}
+
 async function runCli() {
   const args = process.argv.slice(2);
+  if (hasFlag(args, 'help') || args.includes('-h')) {
+    process.stdout.write(`${helpText()}\n\n${listSkinsText()}\n`);
+    return;
+  }
+  if (hasFlag(args, 'list-skins')) {
+    process.stdout.write(`${listSkinsText()}\n`);
+    return;
+  }
   if (hasFlag(args, 'statusline')) {
     await runStatusline(args);
     return;
@@ -762,6 +965,10 @@ async function runCli() {
   const useStdin = hasFlag(args, 'stdin');
   const noClear = hasFlag(args, 'no-clear');
   const size = getStringOption(args, 'size', 'l');
+  const skin = getStringOption(args, 'skin', DEFAULT_SKIN);
+  if (!isKnownSkin(skin)) {
+    process.stderr.write(`token-horse: unknown skin '${skin}'. Run 'token-horse --list-skins' for options. Using '${DEFAULT_SKIN}'.\n`);
+  }
   let tokenRate = Number.isFinite(fixedRate) ? fixedRate : 0;
   let totalTokens = null;
   let lastTokenSampleTime = null;
@@ -853,7 +1060,7 @@ async function runCli() {
 
     if (!noClear) process.stdout.write(CLEAR_SCREEN);
     const blink = Math.floor(now / 1000) % BLINK_PERIOD_SEC === 0;
-    process.stdout.write(makeHorseFrame(Math.floor(legPhase), { size, blink }));
+    process.stdout.write(makeHorseFrame(Math.floor(legPhase), { size, blink, skin }));
     process.stdout.write('\n');
 
     if (durationSec > 0 && elapsedSec >= durationSec) return shutdown(0);

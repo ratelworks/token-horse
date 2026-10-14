@@ -32,7 +32,6 @@ import {
   smoothTokenRate,
   tokenRateToLegFps,
   weighClaudeUsage,
-  weighCodexUsage,
 } from './horse-core.mjs';
 
 export {
@@ -47,7 +46,6 @@ export {
   partAt,
   tokenRateToLegFps,
   weighClaudeUsage,
-  weighCodexUsage,
 } from './horse-core.mjs';
 
 const DEFAULT_DURATION_SEC = 12;
@@ -64,11 +62,6 @@ const STATUSLINE_STATE_DIR = join(
 );
 const DEFAULT_STATUSLINE_STATE_FILE = join(STATUSLINE_STATE_DIR, 'state.json');
 const STATUSLINE_STATE_TTL_MS = 48 * 60 * 60 * 1000;
-const CODEX_SESSIONS_ROOT = join(homedir(), '.codex', 'sessions');
-const CODEX_POLL_INTERVAL_MS = 1000;
-const CODEX_RESCAN_INTERVAL_MS = 5000;
-const CODEX_TAIL_BYTES = 64 * 1024;
-const CODEX_SESSION_FILE_PATTERN = /rollout-.*\.jsonl$/u;
 const RESET = '\x1b[0m';
 const CLEAR_SCREEN = '\x1b[2J\x1b[H';
 const HIDE_CURSOR = '\x1b[?25l';
@@ -158,9 +151,6 @@ export function parseTokenPayload(line) {
       'usage.inputTokens',
       'transcript.total_tokens',
       'transcript.totalTokens',
-      'payload.info.total_token_usage.total_tokens',
-      'info.total_token_usage.total_tokens',
-      'total_token_usage.total_tokens',
     ]);
     if (totalTokens !== null) return { totalTokens, sessionId, transcriptPath };
 
@@ -321,52 +311,6 @@ function pruneStaleStatuslineStates(stateDir) {
   }
 }
 
-export function findLatestCodexSessionFile(rootDir = CODEX_SESSIONS_ROOT) {
-  try {
-    // rollout 파일명은 ISO 타임스탬프 포함 → 경로 사전순 = 시간순
-    const files = readdirSync(rootDir, { recursive: true, encoding: 'utf8' })
-      .filter((name) => CODEX_SESSION_FILE_PATTERN.test(name))
-      .sort();
-    return files.length > 0 ? join(rootDir, files[files.length - 1]) : null;
-  } catch {
-    return null;
-  }
-}
-
-function readFileTail(filePath, maxBytes) {
-  const fd = openSync(filePath, 'r');
-  try {
-    const { size } = fstatSync(fd);
-    const length = Math.min(size, maxBytes);
-    if (length === 0) return '';
-    const buffer = Buffer.alloc(length);
-    readSync(fd, buffer, 0, length, size - length);
-    return buffer.toString('utf8');
-  } finally {
-    closeSync(fd);
-  }
-}
-
-// Codex 세션 로그의 마지막 token_count 이벤트 → 세션 누적 소비(입력 환산 토큰).
-// total_token_usage 의 input/cached/output 을 단가 비율로 가중한다. 세부 항목이 없으면 total_tokens.
-export function extractCodexTotalTokens(text) {
-  const lines = text.split('\n');
-  for (let i = lines.length - 1; i >= 0; i -= 1) {
-    if (!lines[i].includes('"token_count"')) continue;
-    try {
-      const usage = JSON.parse(lines[i])?.payload?.info?.total_token_usage;
-      if (usage && (usage.input_tokens !== undefined || usage.output_tokens !== undefined)) {
-        return weighCodexUsage(usage);
-      }
-    } catch {
-      // 미완성 줄 — 아래 일반 파서로
-    }
-    const payload = parseTokenPayload(lines[i]);
-    if (payload?.totalTokens !== undefined) return payload.totalTokens;
-  }
-  return null;
-}
-
 // Claude Code transcript(JSONL)는 append-only — fromOffset 부터 새로 추가된 줄의
 // assistant usage 만 증분 파싱해 세션 소비(입력 환산 토큰)를 구한다.
 // 한 응답은 콘텐츠 블록마다 줄이 따로 기록되고 각 줄에 같은 usage 가 반복되므로
@@ -498,7 +442,7 @@ async function runStatusline(args) {
       state.tokenRate = tokens > 0 ? Math.max(decayed, tokens / deltaSec) : decayed;
     }
   } else if (payload?.totalTokens !== undefined) {
-    // 누적 토큰 직접 입력 (Codex 등) — 차분 펄스를 즉시 반영하고 느리게 감쇠
+    // 누적 토큰 직접 입력 (외부 도구) — 차분 펄스를 즉시 반영하고 느리게 감쇠
     if (state.totalTokens !== null && deltaSec > 0) {
       const deltaTokens = payload.totalTokens - state.totalTokens;
       const decayed = state.tokenRate * STATUSLINE_DECAY ** deltaSec;
@@ -557,12 +501,11 @@ function listSkinsText() {
 
 function helpText() {
   return [
-    'token-horse — a token-rate-reactive terminal horse for Claude Code & Codex CLI',
+    'token-horse — a token-consumption-reactive terminal horse for Claude Code',
     '',
     'Usage:',
     '  token-horse [options]                Demo animation',
     '  token-horse --statusline [options]   One-shot statusline frame (reads JSON on stdin)',
-    '  token-horse --watch-codex [options]  Follow a Codex CLI session log',
     '',
     'Options:',
     '  --skin=NAME      Horse skin (default: green). See --list-skins.',
@@ -595,9 +538,14 @@ async function runCli() {
     await runStatusline(args);
     return;
   }
+  // 0.3.0 에서 제거된 Codex 모드 — 데모로 조용히 넘어가지 않게 알리고 끝낸다
+  if (hasFlag(args, 'watch-codex')) {
+    process.stderr.write('token-horse: --watch-codex was removed in 0.3.0; Token Horse now supports Claude Code only.\n');
+    process.exitCode = 2;
+    return;
+  }
 
-  const watchCodex = hasFlag(args, 'watch-codex');
-  const durationSec = getOptionValue(args, 'duration', watchCodex ? 0 : DEFAULT_DURATION_SEC);
+  const durationSec = getOptionValue(args, 'duration', DEFAULT_DURATION_SEC);
   const fixedRate = getOptionValue(args, 'rate', Number.NaN);
   const useStdin = hasFlag(args, 'stdin');
   const noClear = hasFlag(args, 'no-clear');
@@ -613,7 +561,6 @@ async function runCli() {
   let previousTime = Date.now();
   let elapsedSec = 0;
   let timer = null;
-  let codexPollTimer = null;
 
   function updateTokenRate(nextRate) {
     if (!Number.isFinite(nextRate)) return;
@@ -640,7 +587,6 @@ async function runCli() {
 
   function shutdown(exitCode = 0) {
     if (timer) clearTimeout(timer);
-    if (codexPollTimer) clearInterval(codexPollTimer);
     process.stdout.write(`${SHOW_CURSOR}${RESET}\n`);
     process.exit(exitCode);
   }
@@ -648,37 +594,6 @@ async function runCli() {
   if (useStdin) {
     const reader = createInterface({ input: process.stdin });
     reader.on('line', (line) => ingestPayload(parseTokenPayload(line)));
-  }
-
-  if (watchCodex) {
-    // Codex CLI 는 커스텀 statusline 명령을 지원하지 않으므로 세션 로그를 직접 tail 한다.
-    // token_count 이벤트의 total_token_usage.total_tokens (세션 누적) 차분으로 속도 계산.
-    const sessionsRoot = getStringOption(args, 'codex-sessions', CODEX_SESSIONS_ROOT);
-    let sessionFile = findLatestCodexSessionFile(sessionsRoot);
-    let lastScanTime = Date.now();
-
-    const pollCodex = () => {
-      const now = Date.now();
-      if (!sessionFile || now - lastScanTime >= CODEX_RESCAN_INTERVAL_MS) {
-        const latest = findLatestCodexSessionFile(sessionsRoot);
-        if (latest && latest !== sessionFile) {
-          sessionFile = latest;
-          totalTokens = null; // 새 세션 파일 — 누적 기준점 리셋
-        }
-        lastScanTime = now;
-      }
-      if (!sessionFile) return;
-
-      try {
-        const total = extractCodexTotalTokens(readFileTail(sessionFile, CODEX_TAIL_BYTES));
-        if (total !== null) ingestPayload({ totalTokens: total });
-      } catch {
-        // 파일 회전/잠금 등 일시 오류 — 다음 폴에서 재시도
-      }
-    };
-
-    pollCodex();
-    codexPollTimer = setInterval(pollCodex, CODEX_POLL_INTERVAL_MS);
   }
 
   process.on('SIGINT', () => shutdown(0));
@@ -690,7 +605,7 @@ async function runCli() {
     previousTime = now;
     elapsedSec += deltaSec;
 
-    if (!useStdin && !watchCodex && !Number.isFinite(fixedRate)) tokenRate = makeDemoTokenRate(elapsedSec);
+    if (!useStdin && !Number.isFinite(fixedRate)) tokenRate = makeDemoTokenRate(elapsedSec);
     const legFps = tokenRateToLegFps(tokenRate);
     if (legFps === 0) legPhase = 0; // 유휴 — 직립 자세로 선다
     else legPhase += legFps * deltaSec;

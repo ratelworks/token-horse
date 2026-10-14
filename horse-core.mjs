@@ -12,12 +12,6 @@ export const CLAUDE_USAGE_WEIGHTS = {
   cacheRead: 0.1,   // 캐시 읽기 = 0.1배
   output: 5,        // 출력 = 5배
 };
-export const CODEX_USAGE_WEIGHTS = {
-  input: 1,
-  cachedInput: 0.1,
-  output: 8,
-};
-
 // 로그 스케일 보정 구간 (입력 환산 토큰/초). 활동 중 10초 창 실측 분포
 // p10≈2.5k · p50≈4.2k · p90≈7k · p99≈44k 를 다리 속도 전 구간에 고르게 펼친다.
 export const TOKEN_RATE_SLOW = 500;
@@ -261,15 +255,6 @@ export function weighClaudeUsage(usage) {
     + count(usage.cache_creation_input_tokens) * w.cacheWrite
     + count(usage.cache_read_input_tokens) * w.cacheRead
     + count(usage.output_tokens) * w.output;
-}
-
-// Codex token_usage(input 에 cached 포함) → 입력 환산 토큰
-export function weighCodexUsage(usage) {
-  if (!usage) return 0;
-  const w = CODEX_USAGE_WEIGHTS;
-  const cached = count(usage.cached_input_tokens);
-  const fresh = Math.max(0, count(usage.input_tokens) - cached);
-  return fresh * w.input + cached * w.cachedInput + count(usage.output_tokens) * w.output;
 }
 
 export function normalizeTokenRate(tokensPerSecond) {

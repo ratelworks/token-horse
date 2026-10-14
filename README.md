@@ -1,6 +1,6 @@
 # Token Horse
 
-A terminal pet for [Claude Code](https://code.claude.com) and [Codex CLI](https://developers.openai.com/codex/cli) — a tiny pixel horse that gallops faster as your session burns more tokens per second.
+A terminal pet for [Claude Code](https://code.claude.com) — a tiny pixel horse that gallops faster as your session burns more tokens per second.
 
 Inspired by the little galloping horse that used to ride on old Korean taxi meters: the faster the fare ticked up, the faster it ran. Same idea here — the harder your model works, the harder this horse gallops.
 
@@ -35,7 +35,7 @@ Answer `y` to add the marketplace, then pick a scope. From a shell, the same is 
 - The speed is read from every model request of the session, subagents included: the response stream makes the horse react the moment output starts, and each request's real usage — cached context included — sets the pace once it completes. The number on the right is that rate.
 - The band draws only in the terminal, and steps aside when the terminal is too narrow, when a survey takes the band, or while the horse is hidden.
 
-The statusline and Codex setups below keep working; use them on older Claude Code versions or if you prefer the statusline.
+The statusline setup below keeps working; use it on older Claude Code versions or if you prefer the statusline.
 
 ## Claude Code statusline
 
@@ -68,25 +68,6 @@ Wire it into the `statusLine` field of your `settings.json`. The status line off
 
 - If your terminal doesn't render truecolor ANSI properly, add `--plain`.
 
-## Codex CLI
-
-Codex CLI's `tui.status_line` only accepts built-in widget identifiers and cannot run external commands. So Token Horse tails the Codex session log (`~/.codex/sessions/**/rollout-*.jsonl`) and reads its `token_count` events directly. Run it in a separate terminal or tmux pane:
-
-```bash
-token-horse --watch-codex
-```
-
-- Automatically finds the most recent session file and follows new sessions as they start.
-- Computes speed from the delta of the session-cumulative token count (`total_token_usage.total_tokens`).
-- Runs forever by default; stop with Ctrl+C, or cap it with `--duration=SECONDS`.
-- If your session directory differs, point to it with `--codex-sessions=/path/to/sessions`.
-
-Example, pinned to a bottom tmux pane:
-
-```bash
-tmux split-window -v -l 9 'token-horse --watch-codex --no-clear'
-```
-
 ## Skins
 
 Token Horse ships with several palettes. Pick one with `--skin=<name>` — the default is `green`. Run `token-horse --list-skins` to preview them all (in color, right in your terminal), or `token-horse --help` for every option.
@@ -115,7 +96,7 @@ Each palette is split by body part (coat / mane + tail / hooves), so a skin re-c
 
 - The default L size is a 32-column × 8-row half-block frame, pixel-identical to the preview GIF. Want it smaller? `--size=s` gives you a compact 16×4 frame.
 - The horse silhouette is drawn with solid block glyphs in three shades (truecolor ANSI) — green by default, or any of the skins above — so it stays crisp in any monospace font.
-- Speed tracks **how fast the session is actually spending tokens** — the same thing that drains your plan's usage limits. Each request's usage is weighed by its price relative to plain input: uncached input ×1, cache writes ×1.25, cache reads ×0.1, output ×5 (Codex: cached input ×0.1, output ×8). Measured that way, most of a long session's spend is re-reading its cached context rather than writing output, so a horse that only counted output would barely move.
+- Speed tracks **how fast the session is actually spending tokens** — the same thing that drains your plan's usage limits. Each request's usage is weighed by its price relative to plain input: uncached input ×1, cache writes ×1.25, cache reads ×0.1, output ×5. Measured that way, most of a long session's spend is re-reading its cached context rather than writing output, so a horse that only counted output would barely move.
 - In the statusline, token-horse reads the session's `transcript_path` JSONL and measures the per-poll delta. A response is written as several lines that repeat the same usage, so each response is counted once, by its message id. Transcripts are append-only, so context compaction never distorts the speed.
 - Speed is continuous and logarithmic: around 500 tokens/sec it trots, and past 15,000 tokens/sec it's at a full gallop. Typical busy sessions sit in the middle (about 2,500–7,000).
 - Token pulses register instantly — fast models really do make it run like mad — then decay slowly, so the horse keeps running while you work and only comes to a standstill (in an upright pose) once the tokens have truly stopped.
@@ -144,12 +125,6 @@ Rates and counts are input-equivalent tokens (see *How it behaves*). Claude Code
   "session_id": "abc123",
   "transcript_path": "~/.claude/projects/your-project/abc123.jsonl"
 }
-```
-
-Codex session event line (what `--watch-codex` parses internally):
-
-```json
-{ "type": "event_msg", "payload": { "type": "token_count", "info": { "total_token_usage": { "input_tokens": 504506, "cached_input_tokens": 454400, "output_tokens": 6499, "total_tokens": 511005 } } } }
 ```
 
 When given a cumulative token count, tokens/sec is computed from the delta between calls.

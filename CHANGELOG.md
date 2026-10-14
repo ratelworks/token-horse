@@ -8,8 +8,12 @@
 
 ### Changed
 
-- Speed now follows how fast the session actually spends tokens, the same thing that drains your plan's usage limits: each request's usage is weighed by price relative to plain input (cache reads ×0.1, cache writes ×1.25, output ×5; for Codex, cached input ×0.1 and output ×8). Cached-context reads used to be ignored, even though they are most of what a long session spends.
+- Speed now follows how fast the session actually spends tokens, the same thing that drains your plan's usage limits: each request's usage is weighed by price relative to plain input (cache reads ×0.1, cache writes ×1.25, output ×5). Cached-context reads used to be ignored, even though they are most of what a long session spends.
 - The speed curve is now logarithmic, from a trot around 500 to a full gallop past 15,000 input-equivalent tokens per second. Direct `tokensPerSecond` input and `--rate` use the same scale, so values from older setups run slower — multiply them by about ten.
+
+### Removed
+
+- Codex CLI support (`--watch-codex`, `--codex-sessions`). Token Horse now targets Claude Code only.
 
 ### Fixed
 

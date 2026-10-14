@@ -8,8 +8,6 @@ import { fileURLToPath } from 'node:url';
 import {
   composeStatuslineWithInfo,
   createDemoStates,
-  extractCodexTotalTokens,
-  findLatestCodexSessionFile,
   getHorsePixels,
   getSkinNames,
   getSkinShades,
@@ -19,7 +17,6 @@ import {
   readTranscriptBillableTokens,
   tokenRateToLegFps,
   weighClaudeUsage,
-  weighCodexUsage,
 } from '../horse-token-runner.mjs';
 
 function ansiFg(hex) {
@@ -138,22 +135,6 @@ test('색상 프레임은 plain 프레임과 같은 자리에 픽셀을 그린�
   }
 });
 
-test('Codex token_count 이벤트 라인에서 세션 누적 토큰을 파싱한다', () => {
-  const eventLine = JSON.stringify({
-    timestamp: '2026-06-10T07:58:40.576Z',
-    type: 'event_msg',
-    payload: {
-      type: 'token_count',
-      info: {
-        total_token_usage: { input_tokens: 100, output_tokens: 50, total_tokens: 150 },
-        last_token_usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
-      },
-    },
-  });
-
-  assert.equal(parseTokenPayload(eventLine)?.totalTokens, 150);
-});
-
 test('parseTokenPayload 는 transcript_path 를 추출하고 context_window 는 토큰으로 쓰지 않는다', () => {
   const payload = parseTokenPayload(JSON.stringify({
     session_id: 'abc',
@@ -193,40 +174,6 @@ test('readTranscriptBillableTokens 는 단가 가중한 증분만 누적한다',
     assert.equal(inc.tokens, 1 + 10 + 3.75 + 5000);
   } finally {
     rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test('extractCodexTotalTokens 는 마지막 token_count 이벤트를 사용한다', () => {
-  const lines = [
-    JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', info: { total_token_usage: { total_tokens: 100 } } } }),
-    JSON.stringify({ type: 'response_item', payload: { type: 'message' } }),
-    JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', info: { total_token_usage: { total_tokens: 250 } } } }),
-    '{"type":"event_msg","payload":{"type":"agent_message"}}',
-  ].join('\n');
-
-  assert.equal(extractCodexTotalTokens(lines), 250);
-  assert.equal(extractCodexTotalTokens('no token lines here'), null);
-});
-
-test('findLatestCodexSessionFile 은 날짜 디렉토리 전체에서 최신 rollout 을 고른다', () => {
-  const root = mkdtempSync(join(tmpdir(), 'token-horse-codex-'));
-
-  try {
-    const oldDir = join(root, '2026', '06', '09');
-    const newDir = join(root, '2026', '06', '10');
-    mkdirSync(oldDir, { recursive: true });
-    mkdirSync(newDir, { recursive: true });
-    writeFileSync(join(oldDir, 'rollout-2026-06-09T10-00-00-aaa.jsonl'), '{}\n');
-    writeFileSync(join(newDir, 'rollout-2026-06-10T14-01-06-bbb.jsonl'), '{}\n');
-    writeFileSync(join(newDir, 'not-a-rollout.txt'), 'ignore\n');
-
-    assert.equal(
-      findLatestCodexSessionFile(root),
-      join(newDir, 'rollout-2026-06-10T14-01-06-bbb.jsonl'),
-    );
-    assert.equal(findLatestCodexSessionFile(join(root, 'missing')), null);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
   }
 });
 
@@ -527,17 +474,6 @@ test('usage 가중: Claude 는 cache_read 0.1·cache_write 1.25·output 5 배로
   assert.equal(weighClaudeUsage({ output_tokens: 'x', input_tokens: -5 }), 0);
 });
 
-test('usage 가중: Codex 는 input 에 포함된 cached 를 분리해 0.1 배, output 8 배로 환산한다', () => {
-  assert.equal(weighCodexUsage({ input_tokens: 1000, cached_input_tokens: 900, output_tokens: 10 }), 100 + 90 + 80);
-});
-
-test('extractCodexTotalTokens 는 세부 usage 가 있으면 가중한 누적을 쓴다', () => {
-  const line = JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', info: { total_token_usage: {
-    input_tokens: 1000, cached_input_tokens: 900, output_tokens: 10, total_tokens: 1010,
-  } } } });
-  assert.equal(extractCodexTotalTokens(line), 270);
-});
-
 test('readTranscriptBillableTokens 는 블록마다 반복 기록된 같은 응답을 한 번만 센다 (폴 경계 포함)', () => {
   const dir = mkdtempSync(join(tmpdir(), 'token-horse-dedupe-'));
   const file = join(dir, 't.jsonl');
@@ -568,4 +504,11 @@ test('다리 속도는 유휴에서 0, 소비가 늘수록 단조 증가하고 �
   assert.equal(samples.at(-1), samples.at(-2)); // 15k 이상은 최고속
   // 실측 분포 p10~p90 이 중간 구간에 고르게 놓인다
   assert.ok(samples[2] > 8 && samples[4] < 20, `p10=${samples[2]} p90=${samples[4]}`);
+});
+
+test('제거된 --watch-codex 는 안내와 함께 종료한다 (데모로 넘어가지 않음)', () => {
+  const run = spawnSync(process.execPath, [RUNNER_PATH, '--watch-codex'], { encoding: 'utf8' });
+  assert.equal(run.status, 2);
+  assert.match(run.stderr, /--watch-codex was removed/);
+  assert.equal(run.stdout, '');
 });

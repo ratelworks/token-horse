@@ -2,7 +2,7 @@
 
 터미널 한구석에서 작은 말 한 마리가 달립니다. AI가 토큰을 빠르게 쓸수록 말은 더 신나게 달리고, 일이 끝나면 멈춰 서서 가끔 눈을 깜빡이며 다음 일을 기다립니다.
 
-옛날 택시 미터기 위에는 작은 말이 있었습니다. 요금이 올라갈수록 더 빨리 달리던 그 말을, AI 코딩 시대의 토큰 미터기로 데려왔습니다. [Claude Code](https://code.claude.com)와 [Codex CLI](https://developers.openai.com/codex/cli)에서 쓸 수 있습니다.
+옛날 택시 미터기 위에는 작은 말이 있었습니다. 요금이 올라갈수록 더 빨리 달리던 그 말을, AI 코딩 시대의 토큰 미터기로 데려왔습니다. [Claude Code](https://code.claude.com)에서 쓸 수 있습니다.
 
 [English README](./README.md)
 
@@ -35,7 +35,7 @@ Claude Code 2.1.275 이상은 인터페이스에 직접 그리는 플러그인�
 - 속도는 세션의 모든 모델 요청(서브에이전트 포함)에서 읽습니다. 응답 스트림으로 출력이 시작되는 순간 반응하고, 요청이 끝나면 캐시된 컨텍스트까지 포함한 실제 usage로 속도를 맞춥니다. 오른쪽 숫자가 그 속도입니다.
 - band는 터미널에서만 그리며, 터미널이 너무 좁거나 설문이 band를 쓰는 동안, 숨김 상태에서는 비켜 섭니다.
 
-아래 statusline·Codex 설정도 그대로 동작합니다. 이전 버전의 Claude Code를 쓰거나 statusline을 선호하면 그쪽을 쓰세요.
+아래 statusline 설정도 그대로 동작합니다. 이전 버전의 Claude Code를 쓰거나 statusline을 선호하면 그쪽을 쓰세요.
 
 ## Claude Code statusline 연결
 
@@ -68,25 +68,6 @@ Claude Code 2.1.275 이상은 인터페이스에 직접 그리는 플러그인�
 
 - 터미널이 truecolor ANSI를 제대로 표시하지 못하면 `--plain`을 붙여 주세요.
 
-## Codex CLI 연결
-
-Codex CLI의 `tui.status_line`은 내장 위젯만 허용하고 외부 명령은 실행하지 못합니다. 그래서 Token Horse가 Codex 세션 로그(`~/.codex/sessions/**/rollout-*.jsonl`)의 `token_count` 이벤트를 직접 따라 읽습니다. 별도 터미널이나 tmux pane에서 실행하세요:
-
-```bash
-token-horse --watch-codex
-```
-
-- 가장 최근 세션 파일을 자동으로 찾고, 새 세션이 시작되면 따라갑니다.
-- 세션 누적 토큰(`total_token_usage.total_tokens`)의 변화량으로 속도를 계산합니다.
-- 기본은 무한 실행이고 Ctrl+C로 종료합니다. `--duration=초`로 시간을 제한할 수도 있습니다.
-- 세션 디렉토리가 다르다면 `--codex-sessions=/path/to/sessions`로 알려 주세요.
-
-tmux 하단 pane에 붙이는 예시:
-
-```bash
-tmux split-window -v -l 9 'token-horse --watch-codex --no-clear'
-```
-
 ## 스킨
 
 여러 색상 팔레트를 제공합니다. `--skin=<이름>`으로 고르며, 기본값은 `green`입니다. `token-horse --list-skins`로 모든 스킨을 터미널에서 컬러로 미리볼 수 있고, `token-horse --help`로 전체 옵션을 확인할 수 있습니다.
@@ -115,7 +96,7 @@ npx token-horse --rate=6000 --duration=8 --skin=redhare
 
 - 기본 L 사이즈는 32자 × 8줄 반각 블록 프레임으로, 프리뷰 GIF와 픽셀 단위로 같습니다. 작게 쓰고 싶으면 `--size=s`(16자 × 4줄)도 있습니다.
 - 말 실루엣은 3단 명도(truecolor ANSI)의 솔리드 블록으로 그려집니다 — 기본은 녹색이고 위 스킨 중 하나를 고를 수 있습니다 — 어떤 모노스페이스 폰트에서도 선명하게 보입니다.
-- 속도는 **세션이 토큰을 실제로 쓰는 빠르기**, 곧 요금제 사용 한도가 닳는 빠르기를 따라갑니다. 요청마다 usage를 일반 입력 대비 단가로 가중합니다: 캐시되지 않은 입력 ×1, 캐시 쓰기 ×1.25, 캐시 읽기 ×0.1, 출력 ×5 (Codex는 캐시된 입력 ×0.1, 출력 ×8). 이렇게 재면 긴 세션의 소비 대부분은 출력이 아니라 캐시된 컨텍스트를 다시 읽는 데서 나오기 때문에, 출력만 세는 말은 거의 움직이지 않습니다.
+- 속도는 **세션이 토큰을 실제로 쓰는 빠르기**, 곧 요금제 사용 한도가 닳는 빠르기를 따라갑니다. 요청마다 usage를 일반 입력 대비 단가로 가중합니다: 캐시되지 않은 입력 ×1, 캐시 쓰기 ×1.25, 캐시 읽기 ×0.1, 출력 ×5. 이렇게 재면 긴 세션의 소비 대부분은 출력이 아니라 캐시된 컨텍스트를 다시 읽는 데서 나오기 때문에, 출력만 세는 말은 거의 움직이지 않습니다.
 - statusline에서는 세션의 `transcript_path` JSONL을 읽어 폴링 사이 증분을 잽니다. 응답 하나가 같은 usage를 반복하는 여러 줄로 기록되므로 메시지 id로 응답마다 한 번만 셉니다. transcript는 덧붙기만 하는 파일이라 컨텍스트 압축에 속도가 왜곡되지 않습니다.
 - 속도는 연속이고 로그 눈금입니다. 500 tokens/sec 근처면 느릿느릿, 15,000 tokens/sec를 넘으면 전력 질주합니다. 바쁜 세션은 대개 중간(약 2,500~7,000)에 있습니다.
 - 토큰 펄스는 즉시 반영됩니다 — 빠른 모델일수록 정말 미친 듯이 달립니다. 대신 천천히 식기 때문에 작업하는 동안에는 계속 달리고, 토큰이 정말 멈췄을 때만 바로 서서 기다립니다.
@@ -144,12 +125,6 @@ npx token-horse --rate=6000 --duration=8 --skin=redhare
   "session_id": "abc123",
   "transcript_path": "~/.claude/projects/your-project/abc123.jsonl"
 }
-```
-
-Codex 세션 이벤트 라인 (`--watch-codex`가 내부에서 읽는 형식):
-
-```json
-{ "type": "event_msg", "payload": { "type": "token_count", "info": { "total_token_usage": { "input_tokens": 504506, "cached_input_tokens": 454400, "output_tokens": 6499, "total_tokens": 511005 } } } }
 ```
 
 누적 토큰이 들어오면 이전 호출과의 차이로 tokens/sec를 계산합니다.

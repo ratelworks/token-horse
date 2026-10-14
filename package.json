@@ -1,7 +1,7 @@
 {
   "name": "token-horse",
   "version": "0.3.0",
-  "description": "Token-consumption-reactive horse pet for Claude Code (mod or statusline) and Codex CLI sessions.",
+  "description": "Token-consumption-reactive horse pet for Claude Code — as a mod above the prompt or in the statusline.",
   "type": "module",
   "bin": {
     "token-horse": "horse-token-runner.mjs"
@@ -34,7 +34,6 @@
     "cli",
     "statusline",
     "claude-code",
-    "codex",
     "token-usage",
     "terminal-pet",
     "claude-code-plugin",

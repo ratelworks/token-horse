@@ -1,0 +1,30 @@
+{
+  "name": "token-horse",
+  "version": "0.3.0",
+  "description": "A pixel horse above the prompt that gallops as fast as your session burns tokens.",
+  "author": {
+    "name": "Ratelworks Inc.",
+    "email": "alphamale@ratelworks.co.kr",
+    "url": "https://ratelworks.co.kr"
+  },
+  "homepage": "https://github.com/ratelworks/token-horse",
+  "repository": "https://github.com/ratelworks/token-horse",
+  "license": "MIT",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "skin": {
+      "type": "string",
+      "title": "Skin",
+      "description": "Horse palette: green, rapidash, bay, redhare or inferno.",
+      "default": "green",
+      "options": ["green", "rapidash", "bay", "redhare", "inferno"]
+    },
+    "size": {
+      "type": "string",
+      "title": "Size",
+      "description": "s = 16x4 cells (compact), l = 32x8 cells.",
+      "default": "s",
+      "options": ["s", "l"]
+    }
+  }
+}

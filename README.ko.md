@@ -17,8 +17,25 @@ npm install -g token-horse
 설치 없이 데모만 구경하기:
 
 ```bash
-npx token-horse --rate=600 --duration=8
+npx token-horse --rate=6000 --duration=8
 ```
+
+## Claude Code mod (권장)
+
+Claude Code 2.1.275 이상은 인터페이스에 직접 그리는 플러그인인 **mod**를 불러올 수 있습니다. mod로 쓰면 말이 프롬프트 바로 위 band에 자리 잡고, statusline처럼 폴링 때마다 한 장씩 다시 그리는 대신 초당 최대 30프레임으로 부드럽게 달립니다. 터미널 세션의 프롬프트에서:
+
+```text
+/plugin install token-horse --marketplace ratelworks/token-horse
+```
+
+마켓플레이스 추가에 `y`로 답하고 범위를 고르면 끝입니다. 셸에서는 `claude plugin install token-horse --marketplace ratelworks/token-horse`로 같은 일을 합니다.
+
+- **스킨과 크기**는 설정 메뉴(`/config`)에서 고릅니다. `skin`은 아래 스킨 중 하나, `size`는 `s`(16×4, 기본) 또는 `l`(32×8)입니다.
+- **숨기기·보이기**는 `/token-horse hide`, `/token-horse show`(인자 없이 `/token-horse`는 전환). 선택은 세션이 바뀌어도 유지됩니다.
+- 속도는 세션의 모든 모델 요청(서브에이전트 포함)에서 읽습니다. 응답 스트림으로 출력이 시작되는 순간 반응하고, 요청이 끝나면 캐시된 컨텍스트까지 포함한 실제 usage로 속도를 맞춥니다. 오른쪽 숫자가 그 속도입니다.
+- band는 터미널에서만 그리며, 터미널이 너무 좁거나 설문이 band를 쓰는 동안, 숨김 상태에서는 비켜 섭니다.
+
+아래 statusline·Codex 설정도 그대로 동작합니다. 이전 버전의 Claude Code를 쓰거나 statusline을 선호하면 그쪽을 쓰세요.
 
 ## Claude Code statusline 연결
 
@@ -89,7 +106,7 @@ token-horse --statusline --skin=rapidash
 설치 없이 미리보기:
 
 ```bash
-npx token-horse --rate=600 --duration=8 --skin=redhare
+npx token-horse --rate=6000 --duration=8 --skin=redhare
 ```
 
 각 팔레트는 부위별(몸통 / 갈기 + 꼬리 / 발굽)로 나뉘어 있어, 같은 질주 애니메이션을 그대로 쓰면서 부위마다 독립적으로 색을 입힙니다. 단색 스킨(`green`, `inferno`)은 실루엣 전체를 한 색역으로 칠합니다.
@@ -98,8 +115,9 @@ npx token-horse --rate=600 --duration=8 --skin=redhare
 
 - 기본 L 사이즈는 32자 × 8줄 반각 블록 프레임으로, 프리뷰 GIF와 픽셀 단위로 같습니다. 작게 쓰고 싶으면 `--size=s`(16자 × 4줄)도 있습니다.
 - 말 실루엣은 3단 명도(truecolor ANSI)의 솔리드 블록으로 그려집니다 — 기본은 녹색이고 위 스킨 중 하나를 고를 수 있습니다 — 어떤 모노스페이스 폰트에서도 선명하게 보입니다.
-- Claude Code에서는 **이 세션이 실제로 소비한 토큰**에 반응합니다. 세션의 `transcript_path` JSONL을 읽어 실소비 토큰(input + output + cache_creation, 캐시 재사용 읽기는 제외)의 증분을 속도로 환산합니다. transcript는 덧붙기만 하는 파일이라 컨텍스트 압축이나 캐시 재사용에 속도가 왜곡되지 않습니다.
-- 속도는 단계가 아니라 연속입니다. 20 tokens/sec 근처면 느릿느릿, 900 tokens/sec를 넘으면 전력 질주합니다.
+- 속도는 **세션이 토큰을 실제로 쓰는 빠르기**, 곧 요금제 사용 한도가 닳는 빠르기를 따라갑니다. 요청마다 usage를 일반 입력 대비 단가로 가중합니다: 캐시되지 않은 입력 ×1, 캐시 쓰기 ×1.25, 캐시 읽기 ×0.1, 출력 ×5 (Codex는 캐시된 입력 ×0.1, 출력 ×8). 이렇게 재면 긴 세션의 소비 대부분은 출력이 아니라 캐시된 컨텍스트를 다시 읽는 데서 나오기 때문에, 출력만 세는 말은 거의 움직이지 않습니다.
+- statusline에서는 세션의 `transcript_path` JSONL을 읽어 폴링 사이 증분을 잽니다. 응답 하나가 같은 usage를 반복하는 여러 줄로 기록되므로 메시지 id로 응답마다 한 번만 셉니다. transcript는 덧붙기만 하는 파일이라 컨텍스트 압축에 속도가 왜곡되지 않습니다.
+- 속도는 연속이고 로그 눈금입니다. 500 tokens/sec 근처면 느릿느릿, 15,000 tokens/sec를 넘으면 전력 질주합니다. 바쁜 세션은 대개 중간(약 2,500~7,000)에 있습니다.
 - 토큰 펄스는 즉시 반영됩니다 — 빠른 모델일수록 정말 미친 듯이 달립니다. 대신 천천히 식기 때문에 작업하는 동안에는 계속 달리고, 토큰이 정말 멈췄을 때만 바로 서서 기다립니다.
 - 달리는 동안에는 원본 스프라이트의 갈기 모션이 은은하게 재생되고, 서 있을 때는 몇 초마다 눈을 깜빡입니다.
 - statusline 모드는 stdin JSON을 한 번 읽고 한 프레임만 출력한 뒤 종료합니다.
@@ -110,7 +128,7 @@ npx token-horse --rate=600 --duration=8 --skin=redhare
 직접 속도를 줄 수도 있고:
 
 ```json
-{ "tokensPerSecond": 450 }
+{ "tokensPerSecond": 4500 }
 ```
 
 누적 토큰을 줄 수도 있습니다:
@@ -119,7 +137,7 @@ npx token-horse --rate=600 --duration=8 --skin=redhare
 { "usage": { "total_tokens": 123456 } }
 ```
 
-Claude Code statusline 입력 — `transcript_path` JSONL을 읽어 턴별 실소비 토큰을 누적하고, 호출 사이의 증분으로 tokens/sec를 계산합니다:
+속도·누적값의 단위는 입력 환산 토큰입니다(*동작 방식* 참고). Claude Code statusline 입력 — `transcript_path` JSONL을 읽어 응답마다 usage를 한 번씩 가중해 누적하고, 호출 사이의 증분으로 속도를 계산합니다:
 
 ```json
 {
@@ -131,7 +149,7 @@ Claude Code statusline 입력 — `transcript_path` JSONL을 읽어 턴별 실�
 Codex 세션 이벤트 라인 (`--watch-codex`가 내부에서 읽는 형식):
 
 ```json
-{ "type": "event_msg", "payload": { "type": "token_count", "info": { "total_token_usage": { "total_tokens": 20987209 } } } }
+{ "type": "event_msg", "payload": { "type": "token_count", "info": { "total_token_usage": { "input_tokens": 504506, "cached_input_tokens": 454400, "output_tokens": 6499, "total_tokens": 511005 } } } }
 ```
 
 누적 토큰이 들어오면 이전 호출과의 차이로 tokens/sec를 계산합니다.
@@ -141,6 +159,8 @@ Codex 세션 이벤트 라인 (`--watch-codex`가 내부에서 읽는 형식):
 ```bash
 npm run check   # 구문 검사 + 테스트 + OSS 위생 게이트
 npm run demo    # 파형 데모 애니메이션
+claude plugin validate .   # mod 매니페스트·훅 모듈 검증
+claude plugin test .       # mod 테스트 (Claude Code 엔진 위에서 실행)
 ```
 
 ## 라이선스

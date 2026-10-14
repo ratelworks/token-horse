@@ -17,6 +17,9 @@ import {
   maneFlameShade,
   parseTokenPayload,
   readTranscriptBillableTokens,
+  tokenRateToLegFps,
+  weighClaudeUsage,
+  weighCodexUsage,
 } from '../horse-token-runner.mjs';
 
 function ansiFg(hex) {
@@ -100,7 +103,7 @@ test('statusline 모드는 transcript 의 실소비 토큰 증분을 속도로 �
     baseState.updatedAt = Date.now() - 1000;
     writeFileSync(stateFile, JSON.stringify(baseState));
 
-    // 2) 응답 1건 추가 — cache_read 가 거대해도 billable(input+output)만 반영돼야 한다
+    // 2) 응답 1건 추가 — 단가 가중한 소비가 속도로 반영돼야 한다
     writeFileSync(
       transcript,
       `${JSON.stringify({
@@ -165,7 +168,7 @@ test('parseTokenPayload 는 transcript_path 를 추출하고 context_window 는 
   assert.equal(payload?.tokensPerSecond, undefined);
 });
 
-test('readTranscriptBillableTokens 는 cache_read 를 제외한 증분만 누적한다', () => {
+test('readTranscriptBillableTokens 는 단가 가중한 증분만 누적한다', () => {
   const dir = mkdtempSync(join(tmpdir(), 'token-horse-tx-'));
   const file = join(dir, 't.jsonl');
   const messageLine = JSON.stringify({
@@ -186,8 +189,8 @@ test('readTranscriptBillableTokens 는 cache_read 를 제외한 증분만 누적
       message: { usage: { input_tokens: 1, output_tokens: 2, cache_creation_input_tokens: 3, cache_read_input_tokens: 50000 } },
     })}\n`);
     const inc = readTranscriptBillableTokens(file, base.offset);
-    // 둘째 줄만: 1+2+3 = 6 (cache_read 50000 제외)
-    assert.equal(inc.tokens, 6);
+    // 둘째 줄만: input 1 + output 2×5 + cache_write 3×1.25 + cache_read 50000×0.1
+    assert.equal(inc.tokens, 1 + 10 + 3.75 + 5000);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -517,3 +520,52 @@ test('statusline 포즈 점프는 폴당 캡 이내다 (고속 랜덤 포즈화 
   }
 });
 
+
+test('usage 가중: Claude 는 cache_read 0.1·cache_write 1.25·output 5 배로 입력 환산한다', () => {
+  assert.equal(weighClaudeUsage({ input_tokens: 10, cache_creation_input_tokens: 8, cache_read_input_tokens: 1000, output_tokens: 4 }), 10 + 10 + 100 + 20);
+  assert.equal(weighClaudeUsage(null), 0);
+  assert.equal(weighClaudeUsage({ output_tokens: 'x', input_tokens: -5 }), 0);
+});
+
+test('usage 가중: Codex 는 input 에 포함된 cached 를 분리해 0.1 배, output 8 배로 환산한다', () => {
+  assert.equal(weighCodexUsage({ input_tokens: 1000, cached_input_tokens: 900, output_tokens: 10 }), 100 + 90 + 80);
+});
+
+test('extractCodexTotalTokens 는 세부 usage 가 있으면 가중한 누적을 쓴다', () => {
+  const line = JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', info: { total_token_usage: {
+    input_tokens: 1000, cached_input_tokens: 900, output_tokens: 10, total_tokens: 1010,
+  } } } });
+  assert.equal(extractCodexTotalTokens(line), 270);
+});
+
+test('readTranscriptBillableTokens 는 블록마다 반복 기록된 같은 응답을 한 번만 센다 (폴 경계 포함)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'token-horse-dedupe-'));
+  const file = join(dir, 't.jsonl');
+  const block = (id) => JSON.stringify({ type: 'assistant', message: { id, usage: { input_tokens: 0, output_tokens: 100 } } });
+
+  try {
+    writeFileSync(file, '');
+    const base = readTranscriptBillableTokens(file, null);
+    writeFileSync(file, `${block('m1')}\n${block('m1')}\n${block('m2')}\n`);
+    const first = readTranscriptBillableTokens(file, base.offset, base.lastMessageId);
+    assert.equal(first.tokens, 1000); // m1, m2 각 500
+    assert.equal(first.lastMessageId, 'm2');
+
+    // 다음 폴: m2 의 남은 블록 + 새 응답 m3
+    writeFileSync(file, `${block('m1')}\n${block('m1')}\n${block('m2')}\n${block('m2')}\n${block('m3')}\n`);
+    const second = readTranscriptBillableTokens(file, first.offset, first.lastMessageId);
+    assert.equal(second.tokens, 500); // m3 만
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('다리 속도는 유휴에서 0, 소비가 늘수록 단조 증가하고 상한에서 멈춘다', () => {
+  assert.equal(tokenRateToLegFps(0), 0);
+  assert.equal(tokenRateToLegFps(Number.NaN), 0);
+  const samples = [100, 500, 2500, 4200, 7000, 15000, 50000].map(tokenRateToLegFps);
+  for (let i = 1; i < samples.length; i += 1) assert.ok(samples[i] >= samples[i - 1]);
+  assert.equal(samples.at(-1), samples.at(-2)); // 15k 이상은 최고속
+  // 실측 분포 p10~p90 이 중간 구간에 고르게 놓인다
+  assert.ok(samples[2] > 8 && samples[4] < 20, `p10=${samples[2]} p90=${samples[4]}`);
+});

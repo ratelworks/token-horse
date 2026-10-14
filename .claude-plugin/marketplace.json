@@ -1,0 +1,15 @@
+{
+  "name": "token-horse",
+  "description": "Token Horse — a token-consumption-reactive pixel horse for Claude Code.",
+  "owner": {
+    "name": "Ratelworks Inc.",
+    "email": "alphamale@ratelworks.co.kr"
+  },
+  "plugins": [
+    {
+      "name": "token-horse",
+      "source": "./",
+      "description": "A pixel horse above the prompt that gallops as fast as your session burns tokens."
+    }
+  ]
+}

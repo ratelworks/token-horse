@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0 — 2026-10-15
+
+### Added
+
+- Claude Code mod: install with `/plugin install token-horse --marketplace ratelworks/token-horse` and the horse lives in a band above the prompt, animating at up to 30 frames a second. Pick `skin` and `size` in `/config`; `/token-horse hide` / `show` toggles it and the choice is remembered. It reads every model request of the session, subagents included, reacting as soon as output streams and settling on each request's real usage when it completes.
+
+### Changed
+
+- Speed now follows how fast the session actually spends tokens, the same thing that drains your plan's usage limits: each request's usage is weighed by price relative to plain input (cache reads ×0.1, cache writes ×1.25, output ×5; for Codex, cached input ×0.1 and output ×8). Cached-context reads used to be ignored, even though they are most of what a long session spends.
+- The speed curve is now logarithmic, from a trot around 500 to a full gallop past 15,000 input-equivalent tokens per second. Direct `tokensPerSecond` input and `--rate` use the same scale, so values from older setups run slower — multiply them by about ten.
+
+### Fixed
+
+- The statusline counted each response several times, because a response is written as one transcript line per content block, each repeating the same usage. Each response is now counted once.
+
 ## 0.2.0 — 2026-06-19
 
 ### Added

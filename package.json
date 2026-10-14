@@ -1,13 +1,15 @@
 {
   "name": "token-horse",
-  "version": "0.2.0",
-  "description": "Token usage reactive horse pet for Claude Code statuslines and Codex CLI sessions.",
+  "version": "0.3.0",
+  "description": "Token-consumption-reactive horse pet for Claude Code (mod or statusline) and Codex CLI sessions.",
   "type": "module",
   "bin": {
     "token-horse": "horse-token-runner.mjs"
   },
   "files": [
     "horse-token-runner.mjs",
+    "horse-core.mjs",
+    "horse-core.d.mts",
     "render-horse-preview.mjs",
     "horse-preview.gif",
     "README.md",
@@ -19,13 +21,14 @@
     "start": "node horse-token-runner.mjs",
     "demo": "node horse-token-runner.mjs",
     "preview": "node render-horse-preview.mjs",
-    "statusline:sample": "printf '{\"tokensPerSecond\":450}' | node horse-token-runner.mjs --statusline",
-    "build": "node --check horse-token-runner.mjs && node --check render-horse-preview.mjs",
+    "statusline:sample": "printf '{\"tokensPerSecond\":4500}' | node horse-token-runner.mjs --statusline",
+    "build": "node --check horse-token-runner.mjs && node --check horse-core.mjs && node --check render-horse-preview.mjs",
     "typecheck": "npm run build",
-    "test": "node --test",
+    "test": "node --test \"tests/*.test.mjs\"",
     "check:oss-hygiene": "node scripts/check-oss-hygiene.mjs",
     "check": "npm run build && npm test && npm run check:oss-hygiene",
-    "prepublishOnly": "npm run check"
+    "prepublishOnly": "npm run check",
+    "check:mod": "claude plugin validate . && claude plugin test ."
   },
   "keywords": [
     "cli",
@@ -33,7 +36,9 @@
     "claude-code",
     "codex",
     "token-usage",
-    "terminal-pet"
+    "terminal-pet",
+    "claude-code-plugin",
+    "claude-code-mod"
   ],
   "author": {
     "name": "Ratelworks Inc.",

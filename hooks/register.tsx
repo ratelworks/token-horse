@@ -56,8 +56,11 @@ const horse = {
   blink: false,
 }
 
-function record(at: number, units: number) {
-  if (units > 0) horse.samples.push({ at, units })
+function record(at: number, units: number): Sample | null {
+  if (!(units > 0)) return null
+  const sample = { at, units }
+  horse.samples.push(sample)
+  return sample
 }
 
 function hexToInt(hex: string | null): number {
@@ -149,6 +152,8 @@ export const register: Register = (on, options) => {
   on('turn.step', async function* ($, e, next) {
     const stream = next(e)
     let estimated = 0
+    // 이 요청의 스트리밍 추정 샘플 — 실제 usage 가 오면 여기에 맞춰 정산한다
+    const guesses: Sample[] = []
     while (true) {
       const step = await stream.next()
       if (step.done) return step.value
@@ -159,10 +164,14 @@ export const register: Register = (on, options) => {
           const piece = chunk.kind === 'input' ? chunk.json : chunk.text
           const units = (piece.length / CHARS_PER_TOKEN) * OUTPUT_WEIGHT
           estimated += units
-          record(now, units)
+          const sample = record(now, units)
+          if (sample) guesses.push(sample)
         } else if (chunk.kind === 'stop' && chunk.usage) {
-          // 실제 소비(입력·캐시 포함)에서 스트리밍 중 이미 센 추정분을 뺀 나머지
-          record(now, Math.max(0, weighClaudeUsage(chunk.usage) - estimated))
+          // 실제 소비(입력·캐시 포함)로 정산: 추정이 모자라면 차이를 더하고,
+          // 넘쳤으면 이 요청의 추정 샘플을 실제/추정 비율로 깎는다
+          const actual = weighClaudeUsage(chunk.usage)
+          if (actual >= estimated) record(now, actual - estimated)
+          else for (const sample of guesses) sample.units *= actual / estimated
         }
       } catch {
         // 집계 실패 — 무시하고 스트림만 넘긴다

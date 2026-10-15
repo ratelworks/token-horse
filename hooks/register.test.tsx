@@ -134,3 +134,13 @@ test('캐시 읽기가 큰 요청은 출력만 같은 작은 요청보다 말을
   expect(small > 0).toBe(true)
   expect(large > small * 10).toBe(true)
 })
+
+test('스트리밍 추정이 실제보다 크면 실제 usage 로 깎아 정산한다', async ($, on) => {
+  const clock = await start($, on)
+  const band = await mountBand($)
+  // 400자 → 추정 100토큰×5 = 500, 실제 출력 80토큰×5 = 400 → 5초 창 속도 80 tok/s (과다 집계면 100)
+  await streamStep($, 'x'.repeat(400), { input_tokens: 0, output_tokens: 80, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 })
+  await clock.advance(4000)
+  const shown = await shownRate(band)
+  expect(shown >= 70 && shown <= 82).toBe(true)
+})

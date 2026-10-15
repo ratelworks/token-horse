@@ -1,0 +1,128 @@
+# npm 배포 자동화 — tag(vX.Y.Z) push 시 registry 게시
+#
+# 본질: 배포 인증을 개인 로컬 토큰에서 떼어낸다. 로컬 npm 인증이 만료돼도
+# tag push 만으로 배포가 끝나며, 배포 코드는 항상 tag 시점 트리와 일치한다.
+#
+# 인증은 두 경로를 지원하고, npm CLI 가 OIDC 를 먼저 찾은 뒤 토큰으로 넘어간다.
+#
+#   [권장] Trusted Publishing (OIDC) — 토큰 없음, 만료 없음
+#     npmjs.com → 패키지 페이지 → Settings → "Trusted Publisher" 에 등록:
+#       Organization or user : ratelworks
+#       Repository           : token-horse
+#       Workflow filename    : npm-publish.yml      (경로 아닌 파일명만)
+#     한 번 등록하면 이후 영구히 tag push 만으로 배포된다.
+#     ⚠️ npm CLI 11.5.1+ / Node 22.14+ 필요 — Node 22 번들 npm 은 10.9.x 라
+#        아래 "npm CLI 상향" 단계가 반드시 있어야 OIDC 가 동작한다.
+#
+#   [대체] NPM_TOKEN Secret — 토큰 발급·회전 필요
+#     npmjs.com → Access Tokens → Generate New Token → Automation
+#     gh secret set NPM_TOKEN --repo ratelworks/token-horse
+#
+# 게이트: npm publish 가 package.json 의 prepublishOnly(npm run check — 구문 검사·테스트·
+#         공개 위생·버전 동기화)를 자동 실행한다. 하나라도 실패하면 게시되지 않는다.
+name: npm publish
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch: # 게이트 실패 후 재시도용 수동 실행
+
+permissions:
+  contents: read
+  id-token: write # Trusted Publishing(OIDC) 인증에 필요 — 없으면 토큰 경로로만 동작
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          registry-url: "https://registry.npmjs.org"
+
+      # Node 22 번들 npm 은 10.9.x 인데 Trusted Publishing(OIDC) 은 11.5.1 이상을 요구한다.
+      # 이 단계가 없으면 Trusted Publisher 를 등록해도 OIDC 인증이 일어나지 않는다.
+      #
+      # ⚠️ `npm@latest` 로 두지 않는다 — 검증되지 않은 새 메이저가 CI 로 바로 흘러든다.
+      #    실제로 npm 12 는 `pack --json` 출력이 달라져 검증 스크립트의 JSON 파싱이 깨졌다
+      #    (2026-09-22, v1.8.2 배포 실패). 메이저를 11 로 고정해 로컬과 같은 계열을 쓴다.
+      - name: npm CLI 상향 (OIDC 요구사항 — 11.5.1+, 메이저 고정)
+        run: npm install -g "npm@^11.5.1"
+
+      - name: Install
+        run: npm ci
+
+      - name: Tag ↔ package.json 버전 일치 확인
+        id: version
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            TAG_VER="${GITHUB_REF_NAME#v}"
+          else
+            TAG_VER="$(node -p "require('./package.json').version")"
+          fi
+          PKG_VER="$(node -p "require('./package.json').version")"
+          if [ "$TAG_VER" != "$PKG_VER" ]; then
+            echo "::error::tag v$TAG_VER ≠ package.json $PKG_VER — 버전 3자 동기화 위반"
+            exit 1
+          fi
+          echo "version=$PKG_VER" >> "$GITHUB_OUTPUT"
+
+      - name: 이미 게시된 버전인지 확인 (재실행 안전)
+        id: published
+        env:
+          PKG_VERSION: ${{ steps.version.outputs.version }} # run 블록 직접 보간 대신 env 경유
+        run: |
+          PKG_NAME="$(node -p "require('./package.json').name")"
+          if npm view "${PKG_NAME}@${PKG_VERSION}" version >/dev/null 2>&1; then
+            echo "이미 게시됨 — 배포 단계를 건너뜁니다."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 배포 인증 사전 점검 (토큰 검증 우선 · 없으면 OIDC — 값 비노출)
+        if: steps.published.outputs.skip == 'false'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "npm 버전: $(npm --version) (OIDC 요구 11.5.1+)"
+
+          # ⚠️ ACTIONS_ID_TOKEN_REQUEST_URL 은 permissions.id-token: write 만 있으면
+          #    Trusted Publisher 등록 여부와 무관하게 항상 설정된다. 따라서 이 변수의
+          #    존재를 "OIDC 로 배포 가능" 의 근거로 삼으면 안 된다.
+          #    토큰이 있으면 토큰을 실제로 검증하고, 없을 때만 OIDC 에 맡긴다.
+          if [ -n "${NODE_AUTH_TOKEN}" ]; then
+            echo "토큰 발견 (길이 ${#NODE_AUTH_TOKEN} — 값은 출력하지 않음)"
+            if npm whoami; then
+              exit 0
+            fi
+            # 토큰이 무효여도 OIDC 가 열려 있으면 게시는 성공한다 — npm CLI 가 OIDC 를
+            # 먼저 시도하고 토큰으로 폴백하기 때문이다. 사전 점검이 게시보다 엄격해서
+            # 정상 경로를 막지 않도록, 여기서는 경고만 남기고 넘긴다.
+            if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+              echo "::warning::토큰이 registry 인증에 실패했습니다(만료·오타·권한) — Trusted Publishing(OIDC) 으로 시도합니다."
+              exit 0
+            fi
+            echo "::error::토큰이 registry 인증에 실패했습니다 — 만료·오타·권한(read/write + bypass 2FA) 확인 필요."
+            exit 1
+          fi
+
+          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            echo "NPM_TOKEN 이 비어 있습니다 — Trusted Publishing(OIDC) 으로 시도합니다."
+            echo "  npmjs.com 패키지 설정에 Trusted Publisher 가 등록돼 있지 않으면 게시 단계에서 실패합니다."
+            echo "  등록값: ratelworks / token-horse / npm-publish.yml"
+            exit 0
+          fi
+
+          echo "::error::인증 수단이 없습니다 — NPM_TOKEN Secret 을 설정하거나 npmjs.com 에서 Trusted Publisher 를 등록하세요."
+          exit 1
+
+      - name: Publish (prepublishOnly 게이트 자동 실행)
+        if: steps.published.outputs.skip == 'false'
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

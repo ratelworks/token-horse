@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1 — 2026-10-15
+
+### Fixed
+
+- Mod: when the live streaming estimate came out higher than a request's real usage, the surplus stayed in the speed. The estimate is now settled down to the real usage.
+
+### Changed
+
+- Releases are built and checked by GitHub Actions on tag push and staged on npm, then published after a maintainer approves them with 2FA.
+
 ## 0.3.0 — 2026-10-15
 
 ### Added

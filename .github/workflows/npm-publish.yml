@@ -1,4 +1,7 @@
-# npm 배포 자동화 — tag(vX.Y.Z) push 시 registry 게시
+# npm 배포 자동화 — tag(vX.Y.Z) push 시 registry 대기 영역(stage)에 올린다
+#
+# 정식 공개는 사람이 한다: npmjs.com → token-horse → Staged Packages 에서 2FA 로 승인
+# (또는 npm stage approve <stage-id>). CI 가 탈취돼도 2FA 없이는 새 버전이 공개되지 않는다.
 #
 # 본질: 배포 인증을 개인 로컬 토큰에서 떼어낸다. 로컬 npm 인증이 만료돼도
 # tag push 만으로 배포가 끝나며, 배포 코드는 항상 tag 시점 트리와 일치한다.
@@ -10,17 +13,16 @@
 #       Organization or user : ratelworks
 #       Repository           : token-horse
 #       Workflow filename    : npm-publish.yml      (경로 아닌 파일명만)
-#       Allowed actions      : npm publish 체크      (2026-09-03 이후 등록분은 기본이
-#                              stage publish 만 허용 — 안 켜면 아래 npm publish 가 실패한다)
+#       Allowed actions      : 체크하지 않는다      (npm stage publish 는 항상 허용 — 직접 공개 권한 불필요)
 #     한 번 등록하면 이후 영구히 tag push 만으로 배포된다.
-#     ⚠️ npm CLI 11.5.1+ / Node 22.14+ 필요 — Node 22 번들 npm 은 10.9.x 라
+#     ⚠️ npm CLI 11.15.0+ (stage publish) / Node 22.14+ 필요 — Node 22 번들 npm 은 10.9.x 라
 #        아래 "npm CLI 상향" 단계가 반드시 있어야 OIDC 가 동작한다.
 #
 #   [대체] NPM_TOKEN Secret — 토큰 발급·회전 필요
 #     npmjs.com → Access Tokens → Generate New Token → Automation
 #     gh secret set NPM_TOKEN --repo ratelworks/token-horse
 #
-# 게이트: npm publish 가 package.json 의 prepublishOnly(npm run check — 구문 검사·테스트·
+# 게이트: npm stage publish 가 package.json 의 prepublishOnly(npm run check — 구문 검사·테스트·
 #         공개 위생·버전 동기화)를 자동 실행한다. 하나라도 실패하면 게시되지 않는다.
 name: npm publish
 
@@ -52,8 +54,8 @@ jobs:
       # ⚠️ `npm@latest` 로 두지 않는다 — 검증되지 않은 새 메이저가 CI 로 바로 흘러든다.
       #    실제로 npm 12 는 `pack --json` 출력이 달라져 검증 스크립트의 JSON 파싱이 깨졌다
       #    (2026-09-22, v1.8.2 배포 실패). 메이저를 11 로 고정해 로컬과 같은 계열을 쓴다.
-      - name: npm CLI 상향 (OIDC 요구사항 — 11.5.1+, 메이저 고정)
-        run: npm install -g "npm@^11.5.1"
+      - name: npm CLI 상향 (stage publish 요구 11.15.0+, 메이저 고정)
+        run: npm install -g "npm@^11.15.0"
 
       - name: Install
         run: npm ci
@@ -123,8 +125,8 @@ jobs:
           echo "::error::인증 수단이 없습니다 — NPM_TOKEN Secret 을 설정하거나 npmjs.com 에서 Trusted Publisher 를 등록하세요."
           exit 1
 
-      - name: Publish (prepublishOnly 게이트 자동 실행)
+      - name: Stage (prepublishOnly 게이트 자동 실행 — 공개는 2FA 승인 후)
         if: steps.published.outputs.skip == 'false'
-        run: npm publish --access public
+        run: npm stage publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -10,6 +10,8 @@
 #       Organization or user : ratelworks
 #       Repository           : token-horse
 #       Workflow filename    : npm-publish.yml      (경로 아닌 파일명만)
+#       Allowed actions      : npm publish 체크      (2026-09-03 이후 등록분은 기본이
+#                              stage publish 만 허용 — 안 켜면 아래 npm publish 가 실패한다)
 #     한 번 등록하면 이후 영구히 tag push 만으로 배포된다.
 #     ⚠️ npm CLI 11.5.1+ / Node 22.14+ 필요 — Node 22 번들 npm 은 10.9.x 라
 #        아래 "npm CLI 상향" 단계가 반드시 있어야 OIDC 가 동작한다.
